@@ -301,14 +301,15 @@
       const last = words.pop();
       return [...words, singularize(last)].join(" ");
     }
-    function hasIngredient(name) {
-      return pantryIngredients.has(canonicalIngredient(name));
+    const canonicalRecipeIngredients = new Map(recipes.map(recipe => [recipe.id, recipe.ingredients.map(canonicalIngredient)]));
+    function hasRecipeIngredient(recipe, index) {
+      return pantryIngredients.has(canonicalRecipeIngredients.get(recipe.id)[index]);
     }
     function isOnShoppingList(name) {
       return state.shopping.some(item => canonicalIngredient(item.name) === canonicalIngredient(name));
     }
     function missingIngredients(recipe) {
-      return recipe.ingredients.filter(item => !hasIngredient(item));
+      return recipe.ingredients.filter((item, index) => !hasRecipeIngredient(recipe, index));
     }
     function showToast(message) {
       const toast = document.getElementById("toast");
@@ -324,7 +325,7 @@
       host.innerHTML = state.pantry.map((name, index) => `<span class="chip">${escapeHtml(name)}<button type="button" data-remove-pantry="${index}" aria-label="Remove ${escapeHtml(name)}">×</button></span>`).join("");
     }
     function recipeCard(recipe) {
-      const have = recipe.ingredients.filter(hasIngredient);
+      const have = recipe.ingredients.filter((item, index) => hasRecipeIngredient(recipe, index));
       const missing = missingIngredients(recipe);
       const missingToAdd = missing.filter(name => !isOnShoppingList(name));
       const selected = state.favorites.includes(recipe.id);
@@ -352,7 +353,7 @@
       const query = normalize(document.getElementById(isSaved ? "saved-search" : "recipe-search").value);
       const filtered = recipes.map(recipe => ({
         recipe,
-        score: recipe.ingredients.filter(hasIngredient).length
+        score: recipe.ingredients.filter((item, index) => hasRecipeIngredient(recipe, index)).length
       })).filter(({ recipe }) => (!isSaved || state.favorites.includes(recipe.id)) &&
         (!query || normalize(recipe.name).includes(query) || normalize(recipe.ingredients.join(" ")).includes(query)))
         .sort((a, b) => b.score - a.score)
@@ -428,7 +429,7 @@
         const id = favoriteButton.dataset.favorite;
         state.favorites = state.favorites.includes(id) ? state.favorites.filter(item => item !== id) : [...state.favorites, id];
         saveState(); render();
-        const replacement = document.querySelector(`[data-favorite="${id}"]`);
+        const replacement = [...document.querySelectorAll("[data-favorite]")].find(button => button.dataset.favorite === id);
         (replacement || document.getElementById(activeTab === "saved" ? "tab-saved" : "tab-recipes")).focus();
         showToast(state.favorites.includes(id) ? "Saved for later." : "Removed from saved recipes.");
         return;
@@ -445,12 +446,16 @@
           }
         });
         saveState(); render();
-        const action = document.querySelector(`[data-add-missing="${recipe.id}"]`);
+        const action = [...document.querySelectorAll("[data-add-missing]")].find(button => button.dataset.addMissing === recipe.id);
         if (action && !action.disabled) action.focus();
         else {
-          const heading = document.querySelector(`[data-recipe-id="${recipe.id}"] h3`);
-          heading.tabIndex = -1;
-          heading.focus();
+          const heading = [...document.querySelectorAll(".recipe-card")].find(card => card.dataset.recipeId === recipe.id)?.querySelector("h3");
+          if (heading) {
+            heading.tabIndex = -1;
+            heading.focus();
+          } else {
+            document.getElementById(activeTab === "saved" ? "tab-saved" : "tab-recipes").focus();
+          }
         }
         showToast(added ? `${added} item${added === 1 ? "" : "s"} added to your list.` : "Those ingredients are already on your list.");
         return;
@@ -487,7 +492,12 @@
     });
     function focusAfterRemoval(buttonSelector, index, fallbackSelector) {
       const buttons = document.querySelectorAll(buttonSelector);
-      (buttons[Math.min(index, buttons.length - 1)] || document.querySelector(fallbackSelector)).focus();
+      const candidates = [
+        buttons[Math.min(index, buttons.length - 1)],
+        document.querySelector(fallbackSelector),
+        document.querySelector('[role="tabpanel"]:not([hidden])')
+      ];
+      candidates.find(element => element?.isConnected && !element.closest("[hidden]"))?.focus();
     }
     document.getElementById("recipe-search").addEventListener("input", renderRecipes);
     document.getElementById("saved-search").addEventListener("input", renderRecipes);

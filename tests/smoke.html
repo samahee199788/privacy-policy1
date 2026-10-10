@@ -69,92 +69,103 @@
     }
     waitForFrameLoad(seedCorruptStorage, "loading the app");
     frame.src = "../index.html";
+    function testPanelRelationships(doc) {
+      assert(doc.getElementById("tab-saved").getAttribute("aria-controls") === "saved-view", "saved tab references its recipe panel");
+      assert(doc.getElementById("saved-view").getAttribute("aria-labelledby") === "tab-saved", "saved panel references its tab");
+      assert(doc.getElementById("tab-shopping").getAttribute("aria-controls") === "shopping-view", "shopping tab references its panel");
+    }
+    function testPantryAndRecipes(doc) {
+      addPantry("tomato");
+      addPantry("tomatoes");
+      assert(doc.querySelectorAll(".chip").length === 1, "singular/plural duplicate prevention");
+      assert(recipe("tomato-pasta").querySelector(".match").textContent.includes("1 of 4"), "singular tomato matches recipe");
+      doc.getElementById("load-sample").click();
+      assert(doc.querySelectorAll(".chip").length === 6, "sample ingredients avoid aliases already in pantry");
+      addPantry("onions");
+      assert(recipe("garden-omelette").querySelector(".match").textContent.includes("4 of 4"), "plural onion matches recipe");
+      const omelette = recipe("garden-omelette");
+      omelette.querySelector("[data-cook]").click();
+      assert(omelette.querySelector("details").open && doc.activeElement.matches("summary"), "start cooking opens and focuses recipe steps");
+      addPantry("black bean");
+      assert(recipe("bean-tacos").querySelector(".match").textContent.includes("2 of 4"), "black bean matches black beans");
+      const blackBeanChip = [...doc.querySelectorAll(".chip")].find(chip => chip.textContent.includes("black bean"));
+      blackBeanChip.querySelector("button").click();
+      assert(doc.activeElement.matches("[data-remove-pantry]"), "pantry removal preserves keyboard focus");
+      addPantry("black bean");
+    }
+    function testFavoritesAndShopping(doc) {
+      const pasta = recipe("tomato-pasta");
+      pasta.querySelector("details summary").click();
+      pasta.querySelector("[data-favorite]").click();
+      assert(recipe("tomato-pasta").querySelector("details").open, "recipe instructions remain open after favorite action");
+      assert(doc.activeElement.matches("[data-favorite]"), "keyboard focus remains on updated favorite");
+      recipe("tomato-pasta").querySelector("[data-add-missing]").click();
+      assert(doc.activeElement.matches("h3"), "keyboard focus moves to recipe title after shopping action is complete");
+      assert(recipe("tomato-pasta").querySelector("[data-add-missing]").disabled, "already-listed missing ingredients are not added twice");
+      doc.getElementById("tab-shopping").click();
+      assert(doc.getElementById("shopping-list").textContent.includes("olive oil"), "recipe missing ingredient added to shopping list");
+      const shoppingInput = doc.getElementById("shopping-input");
+      for (const name of ["tomato", "tomatoes"]) {
+        shoppingInput.value = name;
+        doc.getElementById("shopping-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      }
+      assert(doc.querySelectorAll(".shopping-item").length === 2, "shopping list deduplicates ingredient aliases");
+      shoppingInput.value = "milk";
+      doc.getElementById("shopping-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      doc.querySelectorAll("[data-remove-shopping]")[1].click();
+      assert(doc.querySelectorAll(".shopping-item").length === 2, "shopping item can be removed");
+      assert(doc.activeElement.matches("[data-remove-shopping]"), "shopping removal preserves keyboard focus");
+      const checkbox = doc.querySelector("[data-check]");
+      checkbox.click();
+      assert(checkbox.closest(".shopping-item").classList.contains("checked"), "shopping check state updates");
+      doc.getElementById("clear-checked").click();
+    }
+    function testPersistence(doc) {
+      assert(doc.querySelectorAll(".chip").length === 8, "pantry persists after reload");
+      assert(doc.querySelectorAll(".shopping-item").length === 1, "shopping list persists after reload");
+    }
+    function testSearchAndTabs(doc) {
+      doc.getElementById("recipe-search").value = "no matching recipe";
+      doc.getElementById("recipe-search").dispatchEvent(new Event("input", { bubbles: true }));
+      assert(doc.querySelector(".empty-state strong").textContent === "No recipes found.", "empty search shows a no-results message");
+      doc.getElementById("tab-saved").click();
+      assert(doc.getElementById("recipe-search").value === "" && doc.getElementById("saved-search").value === "", "tab change clears stale searches");
+      assert(doc.querySelectorAll(".recipe-card").length === 1, "saved recipe appears after reload");
+      const tabs = [...doc.querySelectorAll('[role="tab"]')];
+      tabs[1].focus();
+      tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      assert(doc.activeElement === tabs[2], "arrow key moves focus between tabs");
+      assert(tabs[1].getAttribute("aria-selected") === "true", "arrow key does not activate a tab");
+      tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+      assert(doc.activeElement === tabs[2], "End key moves focus to the last tab");
+      tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+      assert(doc.activeElement === tabs[0], "Home key moves focus to the first tab");
+      tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      assert(doc.activeElement === tabs[1], "ArrowRight moves focus from the first tab");
+      assert(tabs[1].getAttribute("aria-selected") === "true", "arrow navigation keeps the selected tab unchanged");
+      doc.getElementById("saved-search").value = "onion";
+      tabs[2].focus();
+      tabs[2].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      assert(doc.getElementById("saved-search").value === "onion", "arrow navigation preserves the search");
+      tabs[1].click();
+      tabs[1].focus();
+      tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      tabs[2].click();
+      assert(tabs[2].getAttribute("aria-selected") === "true", "click activates the focused tab");
+      assert(tabs[2].getAttribute("aria-controls") === "shopping-view", "shopping tab keeps its panel relationship");
+      assert(tabs[1].getAttribute("aria-controls") === "saved-view", "saved tab keeps its panel relationship");
+    }
     function runTests() {
       try {
         const doc = appDocument();
-        assert(doc.getElementById("tab-saved").getAttribute("aria-controls") === "saved-view", "saved tab references its recipe panel");
-        assert(doc.getElementById("saved-view").getAttribute("aria-labelledby") === "tab-saved", "saved panel references its tab");
-        assert(doc.getElementById("tab-shopping").getAttribute("aria-controls") === "shopping-view", "shopping tab references its panel");
-        addPantry("tomato");
-        addPantry("tomatoes");
-        assert(doc.querySelectorAll(".chip").length === 1, "singular/plural duplicate prevention");
-        assert(recipe("tomato-pasta").querySelector(".match").textContent.includes("1 of 4"), "singular tomato matches recipe");
-        doc.getElementById("load-sample").click();
-        assert(doc.querySelectorAll(".chip").length === 6, "sample ingredients avoid aliases already in pantry");
-        addPantry("onions");
-        assert(recipe("garden-omelette").querySelector(".match").textContent.includes("4 of 4"), "plural onion matches recipe");
-        const omelette = recipe("garden-omelette");
-        omelette.querySelector("[data-cook]").click();
-        assert(omelette.querySelector("details").open && doc.activeElement.matches("summary"), "start cooking opens and focuses recipe steps");
-        addPantry("black bean");
-        assert(recipe("bean-tacos").querySelector(".match").textContent.includes("2 of 4"), "black bean matches black beans");
-        const blackBeanChip = [...doc.querySelectorAll(".chip")].find(chip => chip.textContent.includes("black bean"));
-        blackBeanChip.querySelector("button").click();
-        assert(doc.activeElement.matches("[data-remove-pantry]"), "pantry removal preserves keyboard focus");
-        addPantry("black bean");
-
-        const pasta = recipe("tomato-pasta");
-        pasta.querySelector("details summary").click();
-        pasta.querySelector("[data-favorite]").click();
-        assert(recipe("tomato-pasta").querySelector("details").open, "recipe instructions remain open after favorite action");
-        assert(doc.activeElement.matches("[data-favorite]"), "keyboard focus remains on updated favorite");
-        recipe("tomato-pasta").querySelector("[data-add-missing]").click();
-        assert(doc.activeElement.matches("h3"), "keyboard focus moves to recipe title after shopping action is complete");
-        assert(recipe("tomato-pasta").querySelector("[data-add-missing]").disabled, "already-listed missing ingredients are not added twice");
-        doc.getElementById("tab-shopping").click();
-        assert(doc.getElementById("shopping-list").textContent.includes("olive oil"), "recipe missing ingredient added to shopping list");
-
-        const shoppingInput = doc.getElementById("shopping-input");
-        for (const name of ["tomato", "tomatoes"]) {
-          shoppingInput.value = name;
-          doc.getElementById("shopping-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-        }
-        assert(doc.querySelectorAll(".shopping-item").length === 2, "shopping list deduplicates ingredient aliases");
-        shoppingInput.value = "milk";
-        doc.getElementById("shopping-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-        doc.querySelectorAll("[data-remove-shopping]")[1].click();
-        assert(doc.querySelectorAll(".shopping-item").length === 2, "shopping item can be removed");
-        assert(doc.activeElement.matches("[data-remove-shopping]"), "shopping removal preserves keyboard focus");
-        const checkbox = doc.querySelector("[data-check]");
-        checkbox.click();
-        assert(checkbox.closest(".shopping-item").classList.contains("checked"), "shopping check state updates");
-        doc.getElementById("clear-checked").click();
-
+        testPanelRelationships(doc);
+        testPantryAndRecipes(doc);
+        testFavoritesAndShopping(doc);
         waitForFrameLoad(() => {
           try {
             const reloaded = appDocument();
-            assert(reloaded.querySelectorAll(".chip").length === 8, "pantry persists after reload");
-            assert(reloaded.querySelectorAll(".shopping-item").length === 1, "shopping list persists after reload");
-            reloaded.getElementById("recipe-search").value = "no matching recipe";
-            reloaded.getElementById("recipe-search").dispatchEvent(new Event("input", { bubbles: true }));
-            assert(reloaded.querySelector(".empty-state strong").textContent === "No recipes found.", "empty search shows a no-results message");
-            reloaded.getElementById("tab-saved").click();
-            assert(reloaded.getElementById("recipe-search").value === "", "tab change clears stale recipe search");
-            assert(reloaded.getElementById("saved-search").value === "", "tab change clears saved search");
-            assert(reloaded.querySelectorAll(".recipe-card").length === 1, "saved recipe appears after reload");
-            const tabs = [...reloaded.querySelectorAll('[role="tab"]')];
-            tabs[1].focus();
-            tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
-            assert(reloaded.activeElement === tabs[2], "arrow key moves focus between tabs");
-            assert(tabs[1].getAttribute("aria-selected") === "true", "arrow key does not activate a tab");
-            tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
-            assert(reloaded.activeElement === tabs[2], "End key moves focus to the last tab");
-            tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
-            assert(reloaded.activeElement === tabs[0], "Home key moves focus to the first tab");
-            tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
-            assert(reloaded.activeElement === tabs[1], "ArrowRight moves focus from the first tab");
-            assert(tabs[1].getAttribute("aria-selected") === "true", "arrow navigation keeps the selected tab unchanged");
-            reloaded.getElementById("saved-search").value = "onion";
-            tabs[2].focus();
-            tabs[2].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
-            assert(reloaded.getElementById("saved-search").value === "onion", "arrow navigation preserves the search");
-            tabs[1].click();
-            tabs[1].focus();
-            tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
-            tabs[2].click();
-            assert(tabs[2].getAttribute("aria-selected") === "true", "click activates the focused tab");
-            assert(tabs[2].getAttribute("aria-controls") === "shopping-view", "shopping tab keeps its panel relationship");
-            assert(tabs[1].getAttribute("aria-controls") === "saved-view", "saved tab keeps its panel relationship");
+            testPersistence(reloaded);
+            testSearchAndTabs(reloaded);
             finish();
           } catch (error) { fail(error); }
         }, "checking saved state after reload");

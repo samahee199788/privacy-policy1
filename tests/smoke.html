@@ -112,7 +112,8 @@
       assert(doc.querySelectorAll(".shopping-item").length === 2, "shopping list deduplicates ingredient aliases");
       shoppingInput.value = "milk";
       doc.getElementById("shopping-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-      doc.querySelectorAll("[data-remove-shopping]")[1].click();
+      const milkItem = [...doc.querySelectorAll(".shopping-item")].find(item => item.textContent.toLocaleLowerCase().includes("milk"));
+      milkItem.querySelector("[data-remove-shopping]").click();
       assert(doc.querySelectorAll(".shopping-item").length === 2, "shopping item can be removed");
       assert(doc.activeElement.matches("[data-remove-shopping]"), "shopping removal preserves keyboard focus");
       const checkbox = doc.querySelector("[data-check]");
@@ -136,8 +137,10 @@
       tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
       assert(doc.activeElement === tabs[2], "arrow key moves focus between tabs");
       assert(tabs[1].getAttribute("aria-selected") === "true", "arrow key does not activate a tab");
+      tabs[1].focus();
       tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
       assert(doc.activeElement === tabs[2], "End key moves focus to the last tab");
+      tabs[1].focus();
       tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
       assert(doc.activeElement === tabs[0], "Home key moves focus to the first tab");
       tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));

@@ -260,6 +260,11 @@
     let pantryIngredients = new Set();
     let toastTimer;
     const escapeHtml = (value) => String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+    function createShoppingId() {
+      return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
 
     function loadState() {
       try {
@@ -267,7 +272,11 @@
         return {
           pantry: Array.isArray(stored.pantry) ? stored.pantry.filter(x => typeof x === "string") : [],
           favorites: Array.isArray(stored.favorites) ? stored.favorites.filter(x => typeof x === "string") : [],
-          shopping: Array.isArray(stored.shopping) ? stored.shopping.filter(x => x && typeof x.name === "string").map(x => ({ name: x.name, checked: Boolean(x.checked) })) : []
+          shopping: Array.isArray(stored.shopping) ? stored.shopping.filter(x => x && typeof x.name === "string").map(x => ({
+            id: typeof x.id === "string" ? x.id : createShoppingId(),
+            name: x.name,
+            checked: Boolean(x.checked)
+          })) : []
         };
       } catch {
         return emptyState();
@@ -329,7 +338,10 @@
       const missing = missingIngredients(recipe);
       const missingToAdd = missing.filter(name => !isOnShoppingList(name));
       const selected = state.favorites.includes(recipe.id);
-      const tags = recipe.ingredients.map(item => `<span class="mini-tag ${missing.includes(item) ? "missing" : ""}">${missing.includes(item) ? "＋ " : "✓ "}${escapeHtml(item)}</span>`).join("");
+      const tags = recipe.ingredients.map((item, index) => {
+        const inPantry = hasRecipeIngredient(recipe, index);
+        return `<span class="mini-tag ${inPantry ? "" : "missing"}">${inPantry ? "✓ " : "＋ "}${escapeHtml(item)}</span>`;
+      }).join("");
       const recipeId = escapeHtml(recipe.id);
       return `<article class="recipe-card" data-recipe-id="${recipeId}">
         <div class="recipe-art"><span aria-hidden="true">${escapeHtml(recipe.emoji)}</span><button class="favorite ${selected ? "active" : ""}" type="button" data-favorite="${recipeId}" aria-label="${selected ? "Remove from" : "Add to"} favorites" aria-pressed="${selected}">${selected ? "♥" : "♡"}</button></div>
@@ -366,8 +378,10 @@
       });
     }
     function renderShopping() {
-      document.getElementById("shopping-list").innerHTML = state.shopping.length ? state.shopping.map((item, index) =>
-        `<div class="shopping-item ${item.checked ? "checked" : ""}"><input id="shopping-check-${index}" type="checkbox" data-check="${index}" ${item.checked ? "checked" : ""}><label for="shopping-check-${index}"><span>${escapeHtml(item.name)}</span></label><button type="button" data-remove-shopping="${index}" aria-label="Remove ${escapeHtml(item.name)}">×</button></div>`).join("") :
+      document.getElementById("shopping-list").innerHTML = state.shopping.length ? state.shopping.map(item => {
+        const id = escapeHtml(item.id);
+        return `<div class="shopping-item ${item.checked ? "checked" : ""}"><input id="shopping-check-${id}" type="checkbox" data-check="${id}" ${item.checked ? "checked" : ""}><label for="shopping-check-${id}"><span>${escapeHtml(item.name)}</span></label><button type="button" data-remove-shopping="${id}" aria-label="Remove ${escapeHtml(item.name)}">×</button></div>`;
+      }).join("") :
         `<div class="empty-state"><strong>Your list is empty.</strong>Add an item, or add missing ingredients from a recipe.</div>`;
     }
     function render() {
@@ -441,7 +455,7 @@
         let added = 0;
         missing.forEach(name => {
           if (!isOnShoppingList(name)) {
-            state.shopping.push({ name, checked: false });
+            state.shopping.push({ id: createShoppingId(), name, checked: false });
             added++;
           }
         });
@@ -475,7 +489,7 @@
     document.getElementById("shopping-list").addEventListener("change", event => {
       const checkbox = event.target.closest("[data-check]");
       if (!checkbox) return;
-      const item = state.shopping[Number(checkbox.dataset.check)];
+      const item = state.shopping.find(item => item.id === checkbox.dataset.check);
       if (!item) return;
       item.checked = checkbox.checked;
       checkbox.closest(".shopping-item").classList.toggle("checked", item.checked);
@@ -485,7 +499,8 @@
       const button = event.target.closest("[data-remove-shopping]");
       if (!button) return;
       event.preventDefault();
-      const index = Number(button.dataset.removeShopping);
+      const index = state.shopping.findIndex(item => item.id === button.dataset.removeShopping);
+      if (index < 0) return;
       state.shopping.splice(index, 1);
       saveState(); render();
       focusAfterRemoval("#shopping-list [data-remove-shopping]", index, "#shopping-input");
@@ -530,7 +545,7 @@
       if (isOnShoppingList(name)) {
         showToast("That item is already on your list."); return;
       }
-      state.shopping.push({ name, checked: false });
+      state.shopping.push({ id: createShoppingId(), name, checked: false });
       input.value = ""; saveState(); render();
     });
     document.getElementById("clear-checked").addEventListener("click", () => {

@@ -14,4 +14,4 @@ Open [http://localhost:8000](http://localhost:8000). Pantry items, saved recipes
 
 ## Browser smoke test
 
-With the static server running, open [http://localhost:8000/tests/smoke.html](http://localhost:8000/tests/smoke.html). The page runs the key pantry, recipe matching, favorite, shopping-list persistence, and keyboard-tab flows in an embedded browser frame and reports PASS or FAIL.
+With the static server running, open [http://localhost:8000/tests/smoke.html](http://localhost:8000/tests/smoke.html). The page checks pantry matching, corrupted-storage recovery, recipe instructions and favorites, shopping-list persistence, and keyboard navigation in an embedded browser frame. It reports PASS or FAIL.

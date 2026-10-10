@@ -19,7 +19,15 @@
     const frame = document.getElementById("app");
     const tests = [];
     const LOAD_TIMEOUT_MS = 10000;
-    const timeout = setTimeout(() => fail(new Error(`FridgeChef did not load within ${LOAD_TIMEOUT_MS / 1000} seconds.`)), LOAD_TIMEOUT_MS);
+    let loadTimeout;
+    function waitForFrameLoad(callback, description) {
+      clearTimeout(loadTimeout);
+      loadTimeout = setTimeout(() => fail(new Error(`Timed out while ${description}.`)), LOAD_TIMEOUT_MS);
+      frame.addEventListener("load", () => {
+        clearTimeout(loadTimeout);
+        callback();
+      }, { once: true });
+    }
     function assert(condition, message) {
       if (!condition) throw new Error(message);
       tests.push(message);
@@ -32,28 +40,40 @@
     }
     function recipe(id) { return appDocument().querySelector(`[data-recipe-id="${id}"]`); }
     function finish() {
-      clearTimeout(timeout);
+      clearTimeout(loadTimeout);
       result.textContent = `PASS — ${tests.length} browser checks`;
     }
     function fail(error) {
-      clearTimeout(timeout);
+      clearTimeout(loadTimeout);
       result.textContent = `FAIL — ${error.message}`;
       result.style.background = "#f8e5e2";
     }
-    frame.addEventListener("load", () => {
+    function seedCorruptStorage() {
       try {
         const storageKey = appDocument().documentElement.dataset.storageKey;
         if (!storageKey) throw new Error("App storage key is missing.");
-        localStorage.removeItem(storageKey);
-        frame.addEventListener("load", runTests, { once: true });
+        localStorage.setItem(storageKey, "{invalid json");
+        waitForFrameLoad(checkCorruptStorageFallback, "reloading with corrupted storage");
         frame.contentWindow.location.reload();
       } catch (error) { fail(error); }
-    }, { once: true });
+    }
+    function checkCorruptStorageFallback() {
+      try {
+        const doc = appDocument();
+        assert(doc.querySelectorAll(".chip").length === 0, "corrupted storage falls back to an empty pantry");
+        assert(doc.querySelectorAll(".recipe-card").length > 0, "corrupted storage still loads the app");
+        localStorage.removeItem(doc.documentElement.dataset.storageKey);
+        waitForFrameLoad(runTests, "reloading with clean storage");
+        frame.contentWindow.location.reload();
+      } catch (error) { fail(error); }
+    }
+    waitForFrameLoad(seedCorruptStorage, "loading the app");
     frame.src = "../index.html";
     function runTests() {
       try {
         const doc = appDocument();
-        assert(doc.getElementById("tab-saved").getAttribute("aria-controls") === "recipe-view", "saved tab references its recipe panel");
+        assert(doc.getElementById("tab-saved").getAttribute("aria-controls") === "saved-view", "saved tab references its recipe panel");
+        assert(doc.getElementById("saved-view").getAttribute("aria-labelledby") === "tab-saved", "saved panel references its tab");
         assert(doc.getElementById("tab-shopping").getAttribute("aria-controls") === "shopping-view", "shopping tab references its panel");
         addPantry("tomato");
         addPantry("tomatoes");
@@ -100,7 +120,7 @@
         assert(checkbox.closest(".shopping-item").classList.contains("checked"), "shopping check state updates");
         doc.getElementById("clear-checked").click();
 
-        frame.addEventListener("load", () => {
+        waitForFrameLoad(() => {
           try {
             const reloaded = appDocument();
             assert(reloaded.querySelectorAll(".chip").length === 8, "pantry persists after reload");
@@ -110,6 +130,7 @@
             assert(reloaded.querySelector(".empty-state strong").textContent === "No recipes found.", "empty search shows a no-results message");
             reloaded.getElementById("tab-saved").click();
             assert(reloaded.getElementById("recipe-search").value === "", "tab change clears stale recipe search");
+            assert(reloaded.getElementById("saved-search").value === "", "tab change clears saved search");
             assert(reloaded.querySelectorAll(".recipe-card").length === 1, "saved recipe appears after reload");
             const tabs = [...reloaded.querySelectorAll('[role="tab"]')];
             tabs[1].focus();
@@ -123,20 +144,20 @@
             tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
             assert(reloaded.activeElement === tabs[1], "ArrowRight moves focus from the first tab");
             assert(tabs[1].getAttribute("aria-selected") === "true", "arrow navigation keeps the selected tab unchanged");
-            reloaded.getElementById("recipe-search").value = "onion";
+            reloaded.getElementById("saved-search").value = "onion";
             tabs[2].focus();
             tabs[2].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
-            assert(reloaded.getElementById("recipe-search").value === "onion", "arrow navigation preserves the search");
+            assert(reloaded.getElementById("saved-search").value === "onion", "arrow navigation preserves the search");
             tabs[1].click();
             tabs[1].focus();
             tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
             tabs[2].click();
             assert(tabs[2].getAttribute("aria-selected") === "true", "click activates the focused tab");
             assert(tabs[2].getAttribute("aria-controls") === "shopping-view", "shopping tab keeps its panel relationship");
-            assert(tabs[1].getAttribute("aria-controls") === "recipe-view", "saved tab keeps its panel relationship");
+            assert(tabs[1].getAttribute("aria-controls") === "saved-view", "saved tab keeps its panel relationship");
             finish();
           } catch (error) { fail(error); }
-        }, { once: true });
+        }, "checking saved state after reload");
         frame.contentWindow.location.reload();
       } catch (error) { fail(error); }
     }

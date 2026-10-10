@@ -192,14 +192,14 @@
       <section class="content" aria-label="Recipe ideas">
         <div class="tabs-row" role="tablist" aria-label="Recipe sections">
           <button class="tab" role="tab" id="tab-recipes" aria-selected="true" aria-controls="recipe-view" type="button">For you</button>
-          <button class="tab" role="tab" id="tab-saved" aria-selected="false" aria-controls="recipe-view" tabindex="-1" type="button">Saved <span id="saved-count"></span></button>
+          <button class="tab" role="tab" id="tab-saved" aria-selected="false" aria-controls="saved-view" tabindex="-1" type="button">Saved <span id="saved-count"></span></button>
           <button class="tab" role="tab" id="tab-shopping" aria-selected="false" aria-controls="shopping-view" tabindex="-1" type="button">Shopping list <span id="shopping-count"></span></button>
         </div>
         <section id="recipe-view" role="tabpanel" aria-labelledby="tab-recipes" tabindex="0">
           <div class="results-heading">
             <div>
-              <h2 id="results-title">A few good ideas</h2>
-              <p id="results-subtitle">Simple recipes, ready when you are.</p>
+              <h2>A few good ideas</h2>
+              <p id="recipe-subtitle">Add ingredients or explore these simple favorites.</p>
             </div>
             <label class="search">
               <span class="visually-hidden">Search recipes</span>
@@ -207,6 +207,19 @@
             </label>
           </div>
           <div class="recipe-grid" id="recipe-grid" aria-live="polite"></div>
+        </section>
+        <section id="saved-view" role="tabpanel" aria-labelledby="tab-saved" tabindex="0" hidden>
+          <div class="results-heading">
+            <div>
+              <h2>Your saved recipes</h2>
+              <p id="saved-subtitle">The recipes you want to come back to.</p>
+            </div>
+            <label class="search">
+              <span class="visually-hidden">Search saved recipes</span>
+              <input id="saved-search" type="search" placeholder="Search saved recipes">
+            </label>
+          </div>
+          <div class="recipe-grid" id="saved-recipe-grid" aria-live="polite"></div>
         </section>
         <section class="panel" id="shopping-view" role="tabpanel" aria-labelledby="tab-shopping" tabindex="0" hidden>
           <div class="panel-heading">
@@ -291,6 +304,12 @@
     function hasIngredient(name) {
       return pantryIngredients.has(canonicalIngredient(name));
     }
+    function isOnShoppingList(name) {
+      return state.shopping.some(item => canonicalIngredient(item.name) === canonicalIngredient(name));
+    }
+    function missingIngredients(recipe) {
+      return recipe.ingredients.filter(item => !hasIngredient(item));
+    }
     function showToast(message) {
       const toast = document.getElementById("toast");
       toast.textContent = message;
@@ -306,19 +325,20 @@
     }
     function recipeCard(recipe) {
       const have = recipe.ingredients.filter(hasIngredient);
-      const missing = recipe.ingredients.filter(item => !hasIngredient(item));
-      const missingToAdd = missing.filter(name => !state.shopping.some(item => canonicalIngredient(item.name) === canonicalIngredient(name)));
+      const missing = missingIngredients(recipe);
+      const missingToAdd = missing.filter(name => !isOnShoppingList(name));
       const selected = state.favorites.includes(recipe.id);
       const tags = recipe.ingredients.map(item => `<span class="mini-tag ${missing.includes(item) ? "missing" : ""}">${missing.includes(item) ? "＋ " : "✓ "}${escapeHtml(item)}</span>`).join("");
-      return `<article class="recipe-card" data-recipe-id="${recipe.id}">
-        <div class="recipe-art"><span aria-hidden="true">${recipe.emoji}</span><button class="favorite ${selected ? "active" : ""}" type="button" data-favorite="${recipe.id}" aria-label="${selected ? "Remove from" : "Add to"} favorites" aria-pressed="${selected}">${selected ? "♥" : "♡"}</button></div>
+      const recipeId = escapeHtml(recipe.id);
+      return `<article class="recipe-card" data-recipe-id="${recipeId}">
+        <div class="recipe-art"><span aria-hidden="true">${escapeHtml(recipe.emoji)}</span><button class="favorite ${selected ? "active" : ""}" type="button" data-favorite="${recipeId}" aria-label="${selected ? "Remove from" : "Add to"} favorites" aria-pressed="${selected}">${selected ? "♥" : "♡"}</button></div>
         <div class="recipe-body">
           <div class="recipe-meta"><span>${escapeHtml(recipe.category)}</span><span>◷ ${recipe.time} min</span></div>
           <h3>${escapeHtml(recipe.name)}</h3>
           <p class="description">${escapeHtml(recipe.description)}</p>
           <div class="recipe-meta"><span class="match">${have.length} of ${recipe.ingredients.length} ingredients</span>${missing.length ? `<span>${missing.length} to get</span>` : "<span>Ready to make</span>"}</div>
           <div class="recipe-ingredients">${tags}</div>
-          <div class="recipe-actions">${missing.length ? `<button class="primary" type="button" data-add-missing="${recipe.id}" ${missingToAdd.length ? "" : "disabled"}>${missingToAdd.length ? "Add missing to list" : "On your shopping list"}</button>` : `<button class="primary" type="button" data-cook="${recipe.id}">Start cooking</button>`}</div>
+          <div class="recipe-actions">${missing.length ? `<button class="primary" type="button" data-add-missing="${recipeId}" ${missingToAdd.length ? "" : "disabled"}>${missingToAdd.length ? "Add missing to list" : "On your shopping list"}</button>` : `<button class="primary" type="button" data-cook="${recipeId}">Start cooking</button>`}</div>
           <details class="instructions"><summary>See simple steps</summary><ol>${recipe.instructions.map(step => `<li>${escapeHtml(step)}</li>`).join("")}</ol></details>
         </div>
       </article>`;
@@ -326,9 +346,10 @@
     function renderRecipes() {
       const isSaved = activeTab === "saved";
       const openInstructions = new Set([...document.querySelectorAll(".recipe-card details[open]")].map(details => details.closest(".recipe-card").dataset.recipeId));
-      document.getElementById("results-title").textContent = isSaved ? "Your saved recipes" : "A few good ideas";
-      document.getElementById("results-subtitle").textContent = isSaved ? "The recipes you want to come back to." : state.pantry.length ? "Matched to the ingredients in your kitchen." : "Add ingredients or explore these simple favorites.";
-      const query = normalize(document.getElementById("recipe-search").value);
+      document.getElementById("recipe-subtitle").textContent = state.pantry.length ? "Matched to the ingredients in your kitchen." : "Add ingredients or explore these simple favorites.";
+      const grid = document.getElementById(isSaved ? "saved-recipe-grid" : "recipe-grid");
+      const inactiveGrid = document.getElementById(isSaved ? "recipe-grid" : "saved-recipe-grid");
+      const query = normalize(document.getElementById(isSaved ? "saved-search" : "recipe-search").value);
       const filtered = recipes.map(recipe => ({
         recipe,
         score: recipe.ingredients.filter(hasIngredient).length
@@ -336,9 +357,10 @@
         (!query || normalize(recipe.name).includes(query) || normalize(recipe.ingredients.join(" ")).includes(query)))
         .sort((a, b) => b.score - a.score)
         .map(({ recipe }) => recipe);
-      document.getElementById("recipe-grid").innerHTML = filtered.length ? filtered.map(recipeCard).join("") :
+      grid.innerHTML = filtered.length ? filtered.map(recipeCard).join("") :
         `<div class="empty-state"><strong>${isSaved ? "Nothing saved just yet." : "No recipes found."}</strong>${isSaved ? "Tap the heart on a recipe to keep it here." : "Try another search or add a few ingredients."}</div>`;
-      document.querySelectorAll(".recipe-card details.instructions").forEach(details => {
+      inactiveGrid.replaceChildren();
+      grid.querySelectorAll(".recipe-card details.instructions").forEach(details => {
         if (openInstructions.has(details.closest(".recipe-card").dataset.recipeId)) details.open = true;
       });
     }
@@ -354,9 +376,9 @@
       document.getElementById("saved-count").textContent = state.favorites.length ? `(${state.favorites.length})` : "";
       document.getElementById("shopping-count").textContent = state.shopping.length ? `(${state.shopping.length})` : "";
       const shopping = activeTab === "shopping";
-      document.getElementById("recipe-view").hidden = shopping;
+      document.getElementById("recipe-view").hidden = activeTab !== "recipes";
+      document.getElementById("saved-view").hidden = activeTab !== "saved";
       document.getElementById("shopping-view").hidden = !shopping;
-      document.getElementById("recipe-view").setAttribute("aria-labelledby", activeTab === "saved" ? "tab-saved" : "tab-recipes");
       document.getElementById("tab-recipes").setAttribute("aria-selected", String(activeTab === "recipes"));
       document.getElementById("tab-saved").setAttribute("aria-selected", String(activeTab === "saved"));
       document.getElementById("tab-shopping").setAttribute("aria-selected", String(shopping));
@@ -400,7 +422,7 @@
       saveState(); render();
       focusAfterRemoval("#pantry-chips [data-remove-pantry]", index, "#ingredient-input");
     });
-    document.getElementById("recipe-grid").addEventListener("click", event => {
+    function handleRecipeGridClick(event) {
       const favoriteButton = event.target.closest("[data-favorite]");
       if (favoriteButton) {
         const id = favoriteButton.dataset.favorite;
@@ -414,10 +436,10 @@
       const addButton = event.target.closest("[data-add-missing]");
       if (addButton) {
         const recipe = recipes.find(item => item.id === addButton.dataset.addMissing);
-        const missing = recipe.ingredients.filter(item => !hasIngredient(item));
+        const missing = missingIngredients(recipe);
         let added = 0;
         missing.forEach(name => {
-          if (!state.shopping.some(item => canonicalIngredient(item.name) === canonicalIngredient(name))) {
+          if (!isOnShoppingList(name)) {
             state.shopping.push({ name, checked: false });
             added++;
           }
@@ -442,7 +464,9 @@
         const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
         summary.scrollIntoView({ behavior, block: "center" });
       }
-    });
+    }
+    document.getElementById("recipe-grid").addEventListener("click", handleRecipeGridClick);
+    document.getElementById("saved-recipe-grid").addEventListener("click", handleRecipeGridClick);
     document.getElementById("shopping-list").addEventListener("change", event => {
       const checkbox = event.target.closest("[data-check]");
       if (!checkbox) return;
@@ -466,9 +490,11 @@
       (buttons[Math.min(index, buttons.length - 1)] || document.querySelector(fallbackSelector)).focus();
     }
     document.getElementById("recipe-search").addEventListener("input", renderRecipes);
+    document.getElementById("saved-search").addEventListener("input", renderRecipes);
     function selectTab(tab) {
       activeTab = tab;
       document.getElementById("recipe-search").value = "";
+      document.getElementById("saved-search").value = "";
       render();
     }
     document.getElementById("tab-recipes").addEventListener("click", () => selectTab("recipes"));
@@ -491,7 +517,7 @@
       const input = document.getElementById("shopping-input");
       const name = input.value.trim().replace(/\s+/g, " ");
       if (!name) return;
-      if (state.shopping.some(item => canonicalIngredient(item.name) === canonicalIngredient(name))) {
+      if (isOnShoppingList(name)) {
         showToast("That item is already on your list."); return;
       }
       state.shopping.push({ name, checked: false });

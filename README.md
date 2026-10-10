@@ -16,4 +16,4 @@ In the recipe navigation, the arrow keys move focus between tabs; press Enter or
 
 ## Browser smoke test
 
-With the static server running, open [http://localhost:8000/tests/smoke.html](http://localhost:8000/tests/smoke.html). The page checks pantry matching, corrupted-storage recovery, recipe instructions and favorites, shopping-list persistence, and keyboard navigation in an embedded browser frame. It reports PASS or FAIL.
+With the static server running, open [http://localhost:8000/tests/smoke.html](http://localhost:8000/tests/smoke.html). The page checks pantry matching, corrupted-storage recovery, recipe instructions and favorites, shopping-list persistence, and keyboard navigation in an embedded browser frame. It reports PASS or FAIL. The test clears the app's local-storage data on that origin and removes it when the run ends, so use a test browser profile rather than one with saved app data.

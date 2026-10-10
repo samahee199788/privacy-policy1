@@ -58,6 +58,11 @@
       doc.getElementById("ingredient-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     }
     function recipe(id) { return appDocument().querySelector(`[data-recipe-id="${id}"]`); }
+    function pressKey(target, key) {
+      const tab = target.matches('[role="tab"]') ? target : target.closest('[role="tab"]');
+      tab?.focus();
+      target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    }
     function finish() {
       clearTimeout(loadTimeout);
       clearAppStorage();
@@ -156,39 +161,33 @@
       doc.getElementById("recipe-search").dispatchEvent(new Event("input", { bubbles: true }));
       await waitForCondition(() => doc.querySelector(".empty-state strong")?.textContent === "No recipes found.", "no-results state");
       assert(doc.querySelector(".empty-state strong").textContent === "No recipes found.", "empty search shows a no-results message");
+      assert(doc.getElementById("recipe-results-status").textContent === "0 recipes found.", "live status reports result count");
       doc.getElementById("tab-saved").click();
       assert(doc.getElementById("recipe-search").value === "" && doc.getElementById("saved-search").value === "", "tab change clears stale searches");
       assert(doc.querySelectorAll(".recipe-card").length === 1, "saved recipe appears after reload");
       const tabs = [...doc.querySelectorAll('[role="tab"]')];
       tabs[1].click();
-      tabs[1].focus();
-      tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      pressKey(tabs[1], "ArrowRight");
       assert(doc.activeElement === tabs[2], "arrow key moves focus between tabs");
       assert(tabs[1].getAttribute("aria-selected") === "true", "arrow key does not activate a tab");
-      tabs[1].querySelector("span").dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+      pressKey(tabs[1].querySelector("span"), "Home");
       assert(doc.activeElement === tabs[0], "keyboard navigation works from nested tab content");
-      tabs[1].focus();
-      tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+      pressKey(tabs[1], "End");
       assert(doc.activeElement === tabs[2], "End key moves focus to the last tab");
-      tabs[1].focus();
-      tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+      pressKey(tabs[1], "Home");
       assert(doc.activeElement === tabs[0], "Home key moves focus to the first tab");
-      tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      pressKey(tabs[0], "ArrowRight");
       assert(doc.activeElement === tabs[1], "ArrowRight moves focus from the first tab");
       assert(tabs[1].getAttribute("aria-selected") === "true", "arrow navigation keeps the selected tab unchanged");
-      tabs[0].focus();
-      tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      pressKey(tabs[0], "ArrowLeft");
       assert(doc.activeElement === tabs[2], "ArrowLeft wraps from the first to last tab");
-      tabs[2].focus();
-      tabs[2].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      pressKey(tabs[2], "ArrowRight");
       assert(doc.activeElement === tabs[0], "ArrowRight wraps from the last to first tab");
       doc.getElementById("saved-search").value = "onion";
-      tabs[2].focus();
-      tabs[2].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      pressKey(tabs[2], "ArrowLeft");
       assert(doc.getElementById("saved-search").value === "onion", "arrow navigation preserves the search");
       tabs[1].click();
-      tabs[1].focus();
-      tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      pressKey(tabs[1], "ArrowRight");
       tabs[2].click();
       assert(tabs[2].getAttribute("aria-selected") === "true", "click activates the focused tab");
       assert(tabs[2].getAttribute("aria-controls") === "shopping-view", "shopping tab keeps its panel relationship");

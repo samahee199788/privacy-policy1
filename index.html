@@ -66,8 +66,8 @@
     .content { min-width: 0; }
     .tabs-row { display: flex; gap: 7px; border-bottom: 1px solid var(--line); margin-bottom: 22px; }
     .tab { position: relative; padding: 11px 14px 13px; border: 0; background: none; color: var(--muted); font-size: 13px; font-weight: 700; }
-    .tab[aria-selected="true"] { color: var(--green); }
-    .tab[aria-selected="true"]::after { position: absolute; right: 12px; bottom: -1px; left: 12px; height: 2px; content: ""; background: var(--green); border-radius: 5px; }
+    .tab[aria-pressed="true"] { color: var(--green); }
+    .tab[aria-pressed="true"]::after { position: absolute; right: 12px; bottom: -1px; left: 12px; height: 2px; content: ""; background: var(--green); border-radius: 5px; }
     .results-heading { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 17px; }
     .results-heading h2 { margin: 0; font-size: 21px; letter-spacing: -.7px; }
     .results-heading p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
@@ -111,6 +111,7 @@
     .toast { position: fixed; z-index: 5; right: 22px; bottom: 22px; padding: 12px 16px; border-radius: 12px; color: white; background: #24352c; box-shadow: var(--shadow); font-size: 13px; opacity: 0; transform: translateY(8px); transition: .2s; pointer-events: none; }
     .toast.show { opacity: 1; transform: translateY(0); }
     footer { margin-top: 38px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     @media (max-width: 900px) {
       .app { padding-right: 25px; padding-left: 25px; }
       .layout { grid-template-columns: 260px minmax(0, 1fr); gap: 18px; }
@@ -183,11 +184,11 @@
         </section>
       </aside>
       <section class="content" aria-label="Recipe ideas">
-        <nav class="tabs-row" role="tablist" aria-label="Recipe sections">
-          <button class="tab" role="tab" id="tab-recipes" aria-selected="true" type="button">For you</button>
-          <button class="tab" role="tab" id="tab-saved" aria-selected="false" type="button">Saved <span id="saved-count"></span></button>
-          <button class="tab" role="tab" id="tab-shopping" aria-selected="false" type="button">Shopping list <span id="shopping-count"></span></button>
-        </nav>
+        <div class="tabs-row" role="group" aria-label="Recipe sections">
+          <button class="tab" id="tab-recipes" aria-pressed="true" type="button">For you</button>
+          <button class="tab" id="tab-saved" aria-pressed="false" type="button">Saved <span id="saved-count"></span></button>
+          <button class="tab" id="tab-shopping" aria-pressed="false" type="button">Shopping list <span id="shopping-count"></span></button>
+        </div>
         <section id="recipe-view">
           <div class="results-heading">
             <div>
@@ -220,7 +221,6 @@
     <footer>FridgeChef · Make the most of what’s already in your kitchen.</footer>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <style>.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }</style>
   <script>
     const recipes = [
       { id: "tomato-pasta", name: "Weeknight tomato pasta", emoji: "🍝", time: 20, category: "Comfort food", description: "A bright, easy pasta with garlic and a little olive oil.", ingredients: ["pasta", "tomatoes", "garlic", "olive oil"], instructions: ["Boil pasta in salted water until tender.", "Warm olive oil, soften the garlic, then add chopped tomatoes.", "Toss the sauce with drained pasta and season to taste."] },
@@ -235,7 +235,7 @@
 
     const storageKey = "fridgechef-prototype-v1";
     const sampleIngredients = ["tomatoes", "garlic", "pasta", "spinach", "eggs", "cheese"];
-    const defaults = { pantry: [], favorites: [], shopping: [] };
+    const emptyState = () => ({ pantry: [], favorites: [], shopping: [] });
     let state = loadState();
     let activeTab = "recipes";
     let toastTimer;
@@ -245,12 +245,12 @@
       try {
         const stored = JSON.parse(localStorage.getItem(storageKey) || "{}");
         return {
-          pantry: Array.isArray(stored.pantry) ? stored.pantry.filter(x => typeof x === "string") : defaults.pantry,
-          favorites: Array.isArray(stored.favorites) ? stored.favorites.filter(x => typeof x === "string") : defaults.favorites,
-          shopping: Array.isArray(stored.shopping) ? stored.shopping.filter(x => x && typeof x.name === "string").map(x => ({ name: x.name, checked: Boolean(x.checked) })) : defaults.shopping
+          pantry: Array.isArray(stored.pantry) ? stored.pantry.filter(x => typeof x === "string") : [],
+          favorites: Array.isArray(stored.favorites) ? stored.favorites.filter(x => typeof x === "string") : [],
+          shopping: Array.isArray(stored.shopping) ? stored.shopping.filter(x => x && typeof x.name === "string").map(x => ({ name: x.name, checked: Boolean(x.checked) })) : []
         };
       } catch {
-        return { ...defaults };
+        return emptyState();
       }
     }
     function saveState() {
@@ -258,6 +258,11 @@
       catch { showToast("Could not save changes on this device."); }
     }
     function normalize(value) { return value.trim().toLocaleLowerCase(); }
+    const ingredientAliases = { tomato: "tomato", tomatoes: "tomato", egg: "egg", eggs: "egg", potato: "potato", potatoes: "potato", chickpea: "chickpea", chickpeas: "chickpea", herb: "herb", herbs: "herb", oat: "oat", oats: "oat" };
+    function hasIngredient(name) {
+      const target = ingredientAliases[normalize(name)] || normalize(name);
+      return state.pantry.some(item => (ingredientAliases[normalize(item)] || normalize(item)) === target);
+    }
     function showToast(message) {
       const toast = document.getElementById("toast");
       toast.textContent = message;
@@ -270,14 +275,10 @@
       document.getElementById("pantry-count").textContent = state.pantry.length;
       document.getElementById("pantry-empty").hidden = state.pantry.length > 0;
       host.innerHTML = state.pantry.map((name, index) => `<span class="chip">${escapeHtml(name)}<button type="button" data-remove-pantry="${index}" aria-label="Remove ${escapeHtml(name)}">×</button></span>`).join("");
-      host.querySelectorAll("[data-remove-pantry]").forEach(button => button.addEventListener("click", () => {
-        state.pantry.splice(Number(button.dataset.removePantry), 1);
-        saveState(); render();
-      }));
     }
     function recipeCard(recipe) {
-      const have = recipe.ingredients.filter(item => state.pantry.some(pantryItem => normalize(pantryItem) === item));
-      const missing = recipe.ingredients.filter(item => !have.includes(item));
+      const have = recipe.ingredients.filter(hasIngredient);
+      const missing = recipe.ingredients.filter(item => !hasIngredient(item));
       const selected = state.favorites.includes(recipe.id);
       const tags = recipe.ingredients.map(item => `<span class="mini-tag ${missing.includes(item) ? "missing" : ""}">${missing.includes(item) ? "＋ " : "✓ "}${escapeHtml(item)}</span>`).join("");
       return `<article class="recipe-card">
@@ -288,7 +289,7 @@
           <p class="description">${escapeHtml(recipe.description)}</p>
           <div class="recipe-meta"><span class="match">${have.length} of ${recipe.ingredients.length} ingredients</span>${missing.length ? `<span>${missing.length} to get</span>` : "<span>Ready to make</span>"}</div>
           <div class="recipe-ingredients">${tags}</div>
-          <div class="recipe-actions">${missing.length ? `<button class="primary" type="button" data-add-missing="${recipe.id}">Add missing to list</button>` : `<button class="primary" type="button" data-cooked="${recipe.id}">I have everything</button>`}</div>
+          <div class="recipe-actions">${missing.length ? `<button class="primary" type="button" data-add-missing="${recipe.id}">Add missing to list</button>` : `<button class="primary" type="button" data-cook="${recipe.id}">Start cooking</button>`}</div>
           <details class="instructions"><summary>See simple steps</summary><ol>${recipe.instructions.map(step => `<li>${escapeHtml(step)}</li>`).join("")}</ol></details>
         </div>
       </article>`;
@@ -301,43 +302,16 @@
       const filtered = recipes.filter(recipe => (!isSaved || state.favorites.includes(recipe.id)) &&
         (!query || normalize(recipe.name).includes(query) || normalize(recipe.ingredients.join(" ")).includes(query)))
         .sort((a, b) => {
-          const score = recipe => recipe.ingredients.filter(item => state.pantry.some(x => normalize(x) === item)).length;
+          const score = recipe => recipe.ingredients.filter(hasIngredient).length;
           return score(b) - score(a);
         });
       document.getElementById("recipe-grid").innerHTML = filtered.length ? filtered.map(recipeCard).join("") :
         `<div class="empty-state"><strong>${isSaved ? "Nothing saved just yet." : "No recipes found."}</strong>${isSaved ? "Tap the heart on a recipe to keep it here." : "Try another search or add a few ingredients."}</div>`;
-      document.querySelectorAll("[data-favorite]").forEach(button => button.addEventListener("click", () => {
-        const id = button.dataset.favorite;
-        state.favorites = state.favorites.includes(id) ? state.favorites.filter(item => item !== id) : [...state.favorites, id];
-        saveState(); render();
-        showToast(state.favorites.includes(id) ? "Saved for later." : "Removed from saved recipes.");
-      }));
-      document.querySelectorAll("[data-add-missing]").forEach(button => button.addEventListener("click", () => {
-        const recipe = recipes.find(item => item.id === button.dataset.addMissing);
-        const missing = recipe.ingredients.filter(item => !state.pantry.some(x => normalize(x) === item));
-        let added = 0;
-        missing.forEach(name => {
-          if (!state.shopping.some(item => normalize(item.name) === name)) {
-            state.shopping.push({ name, checked: false });
-            added++;
-          }
-        });
-        saveState(); render();
-        showToast(added ? `${added} item${added === 1 ? "" : "s"} added to your list.` : "Those ingredients are already on your list.");
-      }));
-      document.querySelectorAll("[data-cooked]").forEach(button => button.addEventListener("click", () => showToast("Enjoy your meal!")));
     }
     function renderShopping() {
       document.getElementById("shopping-list").innerHTML = state.shopping.length ? state.shopping.map((item, index) =>
-        `<label class="shopping-item ${item.checked ? "checked" : ""}"><input type="checkbox" data-check="${index}" ${item.checked ? "checked" : ""}><span>${escapeHtml(item.name)}</span><button type="button" data-remove-shopping="${index}" aria-label="Remove ${escapeHtml(item.name)}">×</button></label>`).join("") :
+        `<div class="shopping-item ${item.checked ? "checked" : ""}"><input id="shopping-check-${index}" type="checkbox" data-check="${index}" ${item.checked ? "checked" : ""}><label for="shopping-check-${index}"><span>${escapeHtml(item.name)}</span></label><button type="button" data-remove-shopping="${index}" aria-label="Remove ${escapeHtml(item.name)}">×</button></div>`).join("") :
         `<div class="empty-state"><strong>Your list is empty.</strong>Add an item, or add missing ingredients from a recipe.</div>`;
-      document.querySelectorAll("[data-check]").forEach(input => input.addEventListener("change", () => {
-        state.shopping[Number(input.dataset.check)].checked = input.checked; saveState(); renderShopping();
-      }));
-      document.querySelectorAll("[data-remove-shopping]").forEach(button => button.addEventListener("click", event => {
-        event.preventDefault();
-        state.shopping.splice(Number(button.dataset.removeShopping), 1); saveState(); render();
-      }));
     }
     function render() {
       renderPantry();
@@ -347,9 +321,9 @@
       const shopping = activeTab === "shopping";
       document.getElementById("recipe-view").hidden = shopping;
       document.getElementById("shopping-view").hidden = !shopping;
-      document.getElementById("tab-recipes").setAttribute("aria-selected", String(activeTab === "recipes"));
-      document.getElementById("tab-saved").setAttribute("aria-selected", String(activeTab === "saved"));
-      document.getElementById("tab-shopping").setAttribute("aria-selected", String(shopping));
+      document.getElementById("tab-recipes").setAttribute("aria-pressed", String(activeTab === "recipes"));
+      document.getElementById("tab-saved").setAttribute("aria-pressed", String(activeTab === "saved"));
+      document.getElementById("tab-shopping").setAttribute("aria-pressed", String(shopping));
       if (!shopping) renderRecipes();
     }
     function addPantryItem(value) {
@@ -372,6 +346,60 @@
         if (!state.pantry.some(item => normalize(item) === name)) state.pantry.push(name);
       });
       saveState(); render(); showToast("Sample ingredients added.");
+    });
+    document.getElementById("pantry-chips").addEventListener("click", event => {
+      const button = event.target.closest("[data-remove-pantry]");
+      if (!button) return;
+      state.pantry.splice(Number(button.dataset.removePantry), 1);
+      saveState(); render();
+    });
+    document.getElementById("recipe-grid").addEventListener("click", event => {
+      const favoriteButton = event.target.closest("[data-favorite]");
+      if (favoriteButton) {
+        const id = favoriteButton.dataset.favorite;
+        state.favorites = state.favorites.includes(id) ? state.favorites.filter(item => item !== id) : [...state.favorites, id];
+        saveState(); render();
+        showToast(state.favorites.includes(id) ? "Saved for later." : "Removed from saved recipes.");
+        return;
+      }
+      const addButton = event.target.closest("[data-add-missing]");
+      if (addButton) {
+        const recipe = recipes.find(item => item.id === addButton.dataset.addMissing);
+        const missing = recipe.ingredients.filter(item => !hasIngredient(item));
+        let added = 0;
+        missing.forEach(name => {
+          if (!state.shopping.some(item => normalize(item.name) === name)) {
+            state.shopping.push({ name, checked: false });
+            added++;
+          }
+        });
+        saveState(); render();
+        showToast(added ? `${added} item${added === 1 ? "" : "s"} added to your list.` : "Those ingredients are already on your list.");
+        return;
+      }
+      const cookButton = event.target.closest("[data-cook]");
+      if (cookButton) {
+        const summary = cookButton.closest(".recipe-card").querySelector(".instructions summary");
+        summary.parentElement.open = true;
+        summary.focus();
+        summary.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
+    document.getElementById("shopping-list").addEventListener("change", event => {
+      const checkbox = event.target.closest("[data-check]");
+      if (!checkbox) return;
+      const item = state.shopping[Number(checkbox.dataset.check)];
+      if (!item) return;
+      item.checked = checkbox.checked;
+      checkbox.closest(".shopping-item").classList.toggle("checked", item.checked);
+      saveState();
+    });
+    document.getElementById("shopping-list").addEventListener("click", event => {
+      const button = event.target.closest("[data-remove-shopping]");
+      if (!button) return;
+      event.preventDefault();
+      state.shopping.splice(Number(button.dataset.removeShopping), 1);
+      saveState(); render();
     });
     document.getElementById("recipe-search").addEventListener("input", renderRecipes);
     document.getElementById("tab-recipes").addEventListener("click", () => { activeTab = "recipes"; render(); });

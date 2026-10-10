@@ -125,18 +125,22 @@
       assert(doc.querySelectorAll(".chip").length === 8, "pantry persists after reload");
       assert(doc.querySelectorAll(".shopping-item").length === 1, "shopping list persists after reload");
     }
-    function testSearchAndTabs(doc) {
+    async function testSearchAndTabs(doc) {
       doc.getElementById("recipe-search").value = "no matching recipe";
       doc.getElementById("recipe-search").dispatchEvent(new Event("input", { bubbles: true }));
+      await new Promise(resolve => setTimeout(resolve, 150));
       assert(doc.querySelector(".empty-state strong").textContent === "No recipes found.", "empty search shows a no-results message");
       doc.getElementById("tab-saved").click();
       assert(doc.getElementById("recipe-search").value === "" && doc.getElementById("saved-search").value === "", "tab change clears stale searches");
       assert(doc.querySelectorAll(".recipe-card").length === 1, "saved recipe appears after reload");
       const tabs = [...doc.querySelectorAll('[role="tab"]')];
+      tabs[1].click();
       tabs[1].focus();
       tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
       assert(doc.activeElement === tabs[2], "arrow key moves focus between tabs");
       assert(tabs[1].getAttribute("aria-selected") === "true", "arrow key does not activate a tab");
+      tabs[1].querySelector("span").dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+      assert(doc.activeElement === tabs[0], "keyboard navigation works from nested tab content");
       tabs[1].focus();
       tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
       assert(doc.activeElement === tabs[2], "End key moves focus to the last tab");
@@ -168,8 +172,7 @@
           try {
             const reloaded = appDocument();
             testPersistence(reloaded);
-            testSearchAndTabs(reloaded);
-            finish();
+            testSearchAndTabs(reloaded).then(finish).catch(fail);
           } catch (error) { fail(error); }
         }, "checking saved state after reload");
         frame.contentWindow.location.reload();

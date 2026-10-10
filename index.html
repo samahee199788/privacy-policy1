@@ -259,6 +259,7 @@
     let activeTab = "recipes";
     let pantryIngredients = new Set();
     let toastTimer;
+    let searchTimer;
     const escapeHtml = (value) => String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
     function createShoppingId() {
       return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -331,7 +332,7 @@
       const host = document.getElementById("pantry-chips");
       document.getElementById("pantry-count").textContent = state.pantry.length;
       document.getElementById("pantry-empty").hidden = state.pantry.length > 0;
-      host.innerHTML = state.pantry.map((name, index) => `<span class="chip">${escapeHtml(name)}<button type="button" data-remove-pantry="${index}" aria-label="Remove ${escapeHtml(name)}">×</button></span>`).join("");
+      host.innerHTML = state.pantry.map(name => `<span class="chip">${escapeHtml(name)}<button type="button" data-remove-pantry="${escapeHtml(canonicalIngredient(name))}" aria-label="Remove ${escapeHtml(name)}">×</button></span>`).join("");
     }
     function recipeCard(recipe) {
       const have = recipe.ingredients.filter((item, index) => hasRecipeIngredient(recipe, index));
@@ -432,7 +433,8 @@
     document.getElementById("pantry-chips").addEventListener("click", event => {
       const button = event.target.closest("[data-remove-pantry]");
       if (!button) return;
-      const index = Number(button.dataset.removePantry);
+      const index = state.pantry.findIndex(name => canonicalIngredient(name) === button.dataset.removePantry);
+      if (index < 0) return;
       state.pantry.splice(index, 1);
       saveState(); render();
       focusAfterRemoval("#pantry-chips [data-remove-pantry]", index, "#ingredient-input");
@@ -514,10 +516,15 @@
       ];
       candidates.find(element => element?.isConnected && !element.closest("[hidden]"))?.focus();
     }
-    document.getElementById("recipe-search").addEventListener("input", renderRecipes);
-    document.getElementById("saved-search").addEventListener("input", renderRecipes);
+    function scheduleRecipeSearch() {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(renderRecipes, 120);
+    }
+    document.getElementById("recipe-search").addEventListener("input", scheduleRecipeSearch);
+    document.getElementById("saved-search").addEventListener("input", scheduleRecipeSearch);
     function selectTab(tab) {
       activeTab = tab;
+      clearTimeout(searchTimer);
       document.getElementById("recipe-search").value = "";
       document.getElementById("saved-search").value = "";
       render();
@@ -527,7 +534,9 @@
     document.getElementById("tab-shopping").addEventListener("click", () => selectTab("shopping"));
     document.querySelector('[role="tablist"]').addEventListener("keydown", event => {
       const tabs = [...document.querySelectorAll('[role="tab"]')];
-      const current = tabs.indexOf(document.activeElement);
+      const sourceTab = event.target.closest('[role="tab"]');
+      const current = tabs.indexOf(sourceTab);
+      if (current < 0) return;
       let next = current;
       if (event.key === "ArrowRight") next = (current + 1) % tabs.length;
       else if (event.key === "ArrowLeft") next = (current - 1 + tabs.length) % tabs.length;

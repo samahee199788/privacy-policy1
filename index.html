@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-storage-key="fridgechef-prototype-v1">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -238,7 +238,7 @@
       { id: "apple-oats", name: "Cozy apple oats", emoji: "🥣", time: 10, category: "Breakfast", description: "Comforting oats with sweet apple and cinnamon.", ingredients: ["oats", "apple", "milk", "cinnamon"], instructions: ["Add oats and milk to a small saucepan.", "Simmer gently, stirring, until creamy.", "Top with chopped apple and cinnamon."] }
     ];
 
-    const storageKey = "fridgechef-prototype-v1";
+    const storageKey = document.documentElement.dataset.storageKey;
     const sampleIngredients = ["tomatoes", "garlic", "pasta", "spinach", "eggs", "cheese"];
     const emptyState = () => ({ pantry: [], favorites: [], shopping: [] });
     let state = loadState();
@@ -273,12 +273,13 @@
       "black bean": "black bean", "black beans": "black bean",
       "garlic clove": "garlic", "garlic cloves": "garlic"
     };
+    const singularExceptions = new Set(["asparagus", "couscous", "hummus", "molasses", "swiss"]);
     function canonicalIngredient(name) {
       const key = normalize(name);
       if (ingredientAliases[key]) return ingredientAliases[key];
       const words = key.split(/\s+/);
       const last = words.pop();
-      const singular = last.endsWith("ies") ? `${last.slice(0, -3)}y` : last.endsWith("s") && !last.endsWith("ss") ? last.slice(0, -1) : last;
+      const singular = singularExceptions.has(last) ? last : last.endsWith("ies") ? `${last.slice(0, -3)}y` : last.endsWith("s") && !last.endsWith("ss") ? last.slice(0, -1) : last;
       return [...words, singular].join(" ");
     }
     function hasIngredient(name) {
@@ -388,8 +389,10 @@
     document.getElementById("pantry-chips").addEventListener("click", event => {
       const button = event.target.closest("[data-remove-pantry]");
       if (!button) return;
-      state.pantry.splice(Number(button.dataset.removePantry), 1);
+      const index = Number(button.dataset.removePantry);
+      state.pantry.splice(index, 1);
       saveState(); render();
+      focusAfterRemoval("#pantry-chips [data-remove-pantry]", index, "#ingredient-input");
     });
     document.getElementById("recipe-grid").addEventListener("click", event => {
       const favoriteButton = event.target.closest("[data-favorite]");
@@ -441,9 +444,15 @@
       const button = event.target.closest("[data-remove-shopping]");
       if (!button) return;
       event.preventDefault();
-      state.shopping.splice(Number(button.dataset.removeShopping), 1);
+      const index = Number(button.dataset.removeShopping);
+      state.shopping.splice(index, 1);
       saveState(); render();
+      focusAfterRemoval("#shopping-list [data-remove-shopping]", index, "#shopping-input");
     });
+    function focusAfterRemoval(buttonSelector, index, fallbackSelector) {
+      const buttons = document.querySelectorAll(buttonSelector);
+      (buttons[Math.min(index, buttons.length - 1)] || document.querySelector(fallbackSelector)).focus();
+    }
     document.getElementById("recipe-search").addEventListener("input", renderRecipes);
     function selectTab(tab) {
       activeTab = tab;
@@ -463,7 +472,6 @@
       else if (event.key === "End") next = tabs.length - 1;
       else return;
       event.preventDefault();
-      tabs[next].click();
       tabs[next].focus();
     });
     document.getElementById("shopping-form").addEventListener("submit", event => {

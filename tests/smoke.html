@@ -18,6 +18,7 @@
     const result = document.getElementById("result");
     const frame = document.getElementById("app");
     const tests = [];
+    const timeout = setTimeout(() => fail(new Error("FridgeChef did not load within 10 seconds.")), 10000);
     function assert(condition, message) {
       if (!condition) throw new Error(message);
       tests.push(message);
@@ -30,15 +31,25 @@
     }
     function recipe(id) { return appDocument().querySelector(`[data-recipe-id="${id}"]`); }
     function finish() {
+      clearTimeout(timeout);
       result.textContent = `PASS — ${tests.length} browser checks`;
     }
     function fail(error) {
+      clearTimeout(timeout);
       result.textContent = `FAIL — ${error.message}`;
       result.style.background = "#f8e5e2";
     }
-    localStorage.removeItem("fridgechef-prototype-v1");
-    frame.src = "../index.html";
     frame.addEventListener("load", () => {
+      try {
+        const storageKey = appDocument().documentElement.dataset.storageKey;
+        if (!storageKey) throw new Error("App storage key is missing.");
+        localStorage.removeItem(storageKey);
+        frame.addEventListener("load", runTests, { once: true });
+        frame.contentWindow.location.reload();
+      } catch (error) { fail(error); }
+    }, { once: true });
+    frame.src = "../index.html";
+    function runTests() {
       try {
         const doc = appDocument();
         addPantry("tomato");
@@ -51,6 +62,10 @@
         assert(recipe("garden-omelette").querySelector(".match").textContent.includes("4 of 4"), "plural onion matches recipe");
         addPantry("black bean");
         assert(recipe("bean-tacos").querySelector(".match").textContent.includes("2 of 4"), "black bean matches black beans");
+        const blackBeanChip = [...doc.querySelectorAll(".chip")].find(chip => chip.textContent.includes("black bean"));
+        blackBeanChip.querySelector("button").click();
+        assert(doc.activeElement.matches("[data-remove-pantry]"), "pantry removal preserves keyboard focus");
+        addPantry("black bean");
 
         const pasta = recipe("tomato-pasta");
         pasta.querySelector("details summary").click();
@@ -68,6 +83,11 @@
           doc.getElementById("shopping-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
         }
         assert(doc.querySelectorAll(".shopping-item").length === 2, "shopping list deduplicates ingredient aliases");
+        shoppingInput.value = "milk";
+        doc.getElementById("shopping-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        doc.querySelectorAll("[data-remove-shopping]")[1].click();
+        assert(doc.querySelectorAll(".shopping-item").length === 2, "shopping item can be removed");
+        assert(doc.activeElement.matches("[data-remove-shopping]"), "shopping removal preserves keyboard focus");
         const checkbox = doc.querySelector("[data-check]");
         checkbox.click();
         assert(checkbox.closest(".shopping-item").classList.contains("checked"), "shopping check state updates");
@@ -86,7 +106,17 @@
             const tabs = [...reloaded.querySelectorAll('[role="tab"]')];
             tabs[1].focus();
             tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
-            assert(tabs[2].getAttribute("aria-selected") === "true", "arrow key changes active tab");
+            assert(reloaded.activeElement === tabs[2], "arrow key moves focus between tabs");
+            assert(tabs[1].getAttribute("aria-selected") === "true", "arrow key does not activate a tab");
+            reloaded.getElementById("recipe-search").value = "onion";
+            tabs[2].focus();
+            tabs[2].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+            assert(reloaded.getElementById("recipe-search").value === "onion", "arrow navigation preserves the search");
+            tabs[1].click();
+            tabs[1].focus();
+            tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+            tabs[2].click();
+            assert(tabs[2].getAttribute("aria-selected") === "true", "focused tab activates on click or keyboard activation");
             assert(tabs[2].getAttribute("aria-controls") === "shopping-view", "selected tab points to its panel");
             assert(!tabs[1].hasAttribute("aria-controls"), "inactive tab does not claim another panel");
             finish();
@@ -94,7 +124,7 @@
         }, { once: true });
         frame.contentWindow.location.reload();
       } catch (error) { fail(error); }
-    }, { once: true });
+    }
   </script>
 </body>
 </html>

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f6f0">
+  <meta name="description" content="Find simple recipes using what you already have. Save favorites and build a shopping list with FridgeChef.">
+  <title>FridgeChef — Make something good</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #24352c;
+      --muted: #728078;
+      --green: #27634a;
+      --green-dark: #1d4d38;
+      --lime: #d9ed9b;
+      --paper: #f7f6f0;
+      --white: #fffefa;
+      --line: #e7e8df;
+      --orange: #e89955;
+      --shadow: 0 12px 35px rgba(36, 53, 44, .07);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); min-width: 320px; }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    .app { max-width: 1440px; margin: 0 auto; padding: 0 48px 56px; }
+    .topbar { height: 88px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 11px; text-decoration: none; color: inherit; }
+    .brand-mark { width: 40px; height: 40px; display: grid; place-items: center; background: var(--green); color: white; border-radius: 14px; font-size: 22px; }
+    .brand-name { font-size: 20px; font-weight: 800; letter-spacing: -.7px; }
+    .brand-name span { color: var(--green); }
+    .top-note { color: var(--muted); font-size: 13px; }
+    .hero { padding: 53px 0 34px; display: flex; justify-content: space-between; align-items: end; gap: 24px; }
+    .eyebrow { color: var(--green); text-transform: uppercase; letter-spacing: 1.7px; font-size: 11px; font-weight: 800; }
+    h1 { font-size: clamp(34px, 5vw, 54px); letter-spacing: -2.5px; line-height: 1.04; margin: 11px 0 13px; max-width: 660px; }
+    h1 span { color: var(--green); }
+    .hero p { margin: 0; color: var(--muted); font-size: 15px; }
+    .hero-badge { background: #edf2df; color: var(--green-dark); border-radius: 18px; padding: 14px 18px; font-size: 13px; white-space: nowrap; }
+    .layout { display: grid; grid-template-columns: 310px minmax(0, 1fr); gap: 28px; align-items: start; }
+    .sidebar { position: sticky; top: 20px; display: grid; gap: 17px; }
+    .panel, .recipe-card { background: var(--white); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); }
+    .panel { padding: 21px; }
+    .panel-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    h2, h3, p { margin-top: 0; }
+    .panel h2 { font-size: 17px; letter-spacing: -.35px; margin: 0; }
+    .count { min-width: 26px; height: 26px; padding: 0 7px; display: grid; place-items: center; color: var(--green); background: #eff4e6; border-radius: 20px; font-size: 12px; font-weight: 800; }
+    .hint { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0 0 15px; }
+    .ingredient-form { display: flex; gap: 8px; }
+    .ingredient-form input, .search input { min-width: 0; border: 1px solid var(--line); border-radius: 11px; background: #fff; color: var(--ink); outline: none; }
+    .ingredient-form input { width: 100%; height: 42px; padding: 0 12px; font-size: 13px; }
+    input:focus { border-color: #78a789; box-shadow: 0 0 0 3px rgba(39, 99, 74, .1); }
+    .add-button { height: 42px; width: 44px; flex: 0 0 44px; color: white; border: 0; border-radius: 11px; background: var(--green); font-size: 23px; line-height: 1; }
+    .add-button:hover, .primary:hover { background: var(--green-dark); }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 9px; border-radius: 20px; color: #40554a; background: #f1f3ec; font-size: 12px; }
+    .chip button { padding: 0; border: 0; background: transparent; color: #79877d; font-size: 16px; line-height: 12px; }
+    .text-button { padding: 0; border: 0; background: none; color: var(--green); font-size: 12px; font-weight: 700; }
+    .text-button:hover { text-decoration: underline; }
+    .empty-pantry { padding: 12px 0 3px; color: var(--muted); font-size: 12px; }
+    .waste-card { padding: 19px 20px; border-radius: 20px; color: #523c28; background: #f7e8d5; }
+    .waste-card strong { display: block; font-size: 14px; margin-bottom: 5px; }
+    .waste-card p { margin: 0; font-size: 12px; line-height: 1.55; color: #735c43; }
+    .content { min-width: 0; }
+    .tabs-row { display: flex; gap: 7px; border-bottom: 1px solid var(--line); margin-bottom: 22px; }
+    .tab { position: relative; padding: 11px 14px 13px; border: 0; background: none; color: var(--muted); font-size: 13px; font-weight: 700; }
+    .tab[aria-selected="true"] { color: var(--green); }
+    .tab[aria-selected="true"]::after { position: absolute; right: 12px; bottom: -1px; left: 12px; height: 2px; content: ""; background: var(--green); border-radius: 5px; }
+    .results-heading { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 17px; }
+    .results-heading h2 { margin: 0; font-size: 21px; letter-spacing: -.7px; }
+    .results-heading p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+    .search { width: min(230px, 42%); }
+    .search input { width: 100%; height: 39px; padding: 0 12px; font-size: 12px; }
+    .recipe-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .recipe-card { overflow: hidden; box-shadow: 0 5px 18px rgba(36, 53, 44, .04); }
+    .recipe-art { height: 126px; display: grid; place-items: center; position: relative; overflow: hidden; background: #e9edda; font-size: 57px; }
+    .recipe-art::before, .recipe-art::after { position: absolute; width: 150px; height: 150px; content: ""; background: rgba(255,255,255,.23); border-radius: 50%; }
+    .recipe-art::before { top: -102px; left: -27px; }
+    .recipe-art::after { right: -68px; bottom: -112px; }
+    .recipe-art span { position: relative; z-index: 1; filter: drop-shadow(0 7px 5px rgba(49, 61, 41, .13)); }
+    .favorite { position: absolute; z-index: 2; top: 12px; right: 12px; width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.75); border-radius: 50%; color: #68776d; background: rgba(255,255,255,.88); font-size: 18px; }
+    .favorite.active { color: #c95143; }
+    .recipe-body { padding: 15px 16px 16px; }
+    .recipe-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; color: var(--muted); font-size: 11px; }
+    .match { color: var(--green); font-weight: 800; }
+    .recipe-body h3 { margin: 0 0 6px; font-size: 16px; letter-spacing: -.3px; }
+    .description { min-height: 34px; margin: 0 0 13px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .recipe-ingredients { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 14px; }
+    .mini-tag { padding: 5px 7px; border-radius: 7px; background: #f0f2eb; color: #58675d; font-size: 10px; }
+    .mini-tag.missing { color: #815729; background: #f8ebd7; }
+    .recipe-actions { display: flex; gap: 8px; }
+    .primary, .secondary { min-height: 37px; padding: 0 11px; border-radius: 10px; font-size: 11px; font-weight: 750; }
+    .primary { flex: 1; border: 0; color: white; background: var(--green); }
+    .secondary { border: 1px solid var(--line); color: var(--green); background: white; }
+    .instructions { padding-top: 13px; color: #5e6c63; font-size: 12px; line-height: 1.6; }
+    .instructions summary { color: var(--green); font-weight: 750; cursor: pointer; }
+    .instructions ol { padding-left: 18px; margin-bottom: 0; }
+    .empty-state { grid-column: 1 / -1; padding: 45px 20px; border: 1px dashed #cdd5ca; border-radius: 18px; text-align: center; color: var(--muted); }
+    .empty-state strong { display: block; color: var(--ink); margin-bottom: 6px; }
+    .shopping-list { display: grid; gap: 9px; margin-top: 16px; }
+    .shopping-item { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 11px; font-size: 13px; }
+    .shopping-item input { accent-color: var(--green); }
+    .shopping-item.checked span { color: #99a39b; text-decoration: line-through; }
+    .shopping-item button { margin-left: auto; border: 0; background: none; color: #8a968d; font-size: 17px; }
+    .shopping-add { display: flex; gap: 8px; margin-top: 17px; }
+    .shopping-add input { flex: 1; height: 40px; padding: 0 11px; border: 1px solid var(--line); border-radius: 10px; }
+    .shopping-add .primary { flex: 0 0 auto; padding: 0 16px; }
+    .legal-note { margin: 19px 0 0; color: #879188; font-size: 10px; line-height: 1.5; }
+    .toast { position: fixed; z-index: 5; right: 22px; bottom: 22px; padding: 12px 16px; border-radius: 12px; color: white; background: #24352c; box-shadow: var(--shadow); font-size: 13px; opacity: 0; transform: translateY(8px); transition: .2s; pointer-events: none; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    footer { margin-top: 38px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+    @media (max-width: 900px) {
+      .app { padding-right: 25px; padding-left: 25px; }
+      .layout { grid-template-columns: 260px minmax(0, 1fr); gap: 18px; }
+      .panel { padding: 17px; }
+      .recipe-grid { gap: 11px; }
+      .recipe-body { padding: 13px; }
+    }
+    @media (max-width: 700px) {
+      .app { padding: 0 17px 35px; }
+      .topbar { height: 70px; }
+      .top-note { font-size: 11px; }
+      .hero { padding: 35px 0 24px; align-items: start; }
+      .hero-badge { display: none; }
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { position: static; grid-template-columns: 1fr; }
+      .waste-card { display: none; }
+      .content { display: contents; }
+      .tabs-row { grid-row: 2; margin: 1px 0 0; }
+      .content .results-heading, .content .recipe-grid, .content .panel, .content > section { grid-column: 1; }
+      .results-heading { margin: 2px 0 0; }
+      .recipe-grid { grid-template-columns: 1fr; }
+      .recipe-art { height: 145px; }
+      footer { margin-top: 28px; }
+    }
+    @media (max-width: 390px) {
+      .app { padding-right: 12px; padding-left: 12px; }
+      .top-note { display: none; }
+      .results-heading { align-items: start; flex-direction: column; }
+      .search { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="FridgeChef home">
+        <span class="brand-mark" aria-hidden="true">✳</span>
+        <span class="brand-name">fridge<span>chef</span></span>
+      </a>
+      <span class="top-note">Good food. Less waste. Made simple.</span>
+    </header>
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Your kitchen, reimagined</div>
+        <h1>Make something good<br><span>with what you have.</span></h1>
+        <p>Pick your ingredients. We’ll find your next favorite meal.</p>
+      </div>
+      <div class="hero-badge">🥕 &nbsp;Start with what’s in your fridge</div>
+    </section>
+    <main class="layout">
+      <aside class="sidebar">
+        <section class="panel" aria-labelledby="pantry-title">
+          <div class="panel-heading">
+            <h2 id="pantry-title">In your kitchen</h2>
+            <span class="count" id="pantry-count">0</span>
+          </div>
+          <p class="hint">Add a few ingredients to get ideas tailored to you.</p>
+          <form class="ingredient-form" id="ingredient-form">
+            <label class="visually-hidden" for="ingredient-input">Add an ingredient</label>
+            <input id="ingredient-input" type="text" maxlength="40" placeholder="e.g. tomatoes" autocomplete="off">
+            <button class="add-button" type="submit" aria-label="Add ingredient">+</button>
+          </form>
+          <div class="chips" id="pantry-chips"></div>
+          <p class="empty-pantry" id="pantry-empty">Your pantry is waiting for its first ingredient.</p>
+          <button class="text-button" id="load-sample" type="button" style="margin-top:15px">Try sample ingredients</button>
+        </section>
+        <section class="waste-card">
+          <strong>Little ingredients, big ideas.</strong>
+          <p>Start with what you already have and make fewer things go to waste.</p>
+        </section>
+      </aside>
+      <section class="content" aria-label="Recipe ideas">
+        <nav class="tabs-row" role="tablist" aria-label="Recipe sections">
+          <button class="tab" role="tab" id="tab-recipes" aria-selected="true" type="button">For you</button>
+          <button class="tab" role="tab" id="tab-saved" aria-selected="false" type="button">Saved <span id="saved-count"></span></button>
+          <button class="tab" role="tab" id="tab-shopping" aria-selected="false" type="button">Shopping list <span id="shopping-count"></span></button>
+        </nav>
+        <section id="recipe-view">
+          <div class="results-heading">
+            <div>
+              <h2 id="results-title">A few good ideas</h2>
+              <p id="results-subtitle">Simple recipes, ready when you are.</p>
+            </div>
+            <label class="search">
+              <span class="visually-hidden">Search recipes</span>
+              <input id="recipe-search" type="search" placeholder="Search recipes">
+            </label>
+          </div>
+          <div class="recipe-grid" id="recipe-grid" aria-live="polite"></div>
+        </section>
+        <section class="panel" id="shopping-view" hidden>
+          <div class="panel-heading">
+            <h2>Your shopping list</h2>
+            <button class="text-button" id="clear-checked" type="button">Clear checked</button>
+          </div>
+          <p class="hint">Ingredients you need for your next meal, all in one place.</p>
+          <div class="shopping-list" id="shopping-list"></div>
+          <form class="shopping-add" id="shopping-form">
+            <label class="visually-hidden" for="shopping-input">Add to shopping list</label>
+            <input id="shopping-input" type="text" maxlength="60" placeholder="Add an item">
+            <button class="primary" type="submit">Add item</button>
+          </form>
+        </section>
+      </section>
+    </main>
+    <p class="legal-note">Recipe suggestions are for inspiration only. Check ingredient labels and verify allergens and food safety before cooking. FridgeChef does not provide medical or dietary advice.</p>
+    <footer>FridgeChef · Make the most of what’s already in your kitchen.</footer>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <style>.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }</style>
+  <script>
+    const recipes = [
+      { id: "tomato-pasta", name: "Weeknight tomato pasta", emoji: "🍝", time: 20, category: "Comfort food", description: "A bright, easy pasta with garlic and a little olive oil.", ingredients: ["pasta", "tomatoes", "garlic", "olive oil"], instructions: ["Boil pasta in salted water until tender.", "Warm olive oil, soften the garlic, then add chopped tomatoes.", "Toss the sauce with drained pasta and season to taste."] },
+      { id: "garden-omelette", name: "Garden veggie omelette", emoji: "🍳", time: 12, category: "Quick & easy", description: "A fluffy, flexible omelette for any time of day.", ingredients: ["eggs", "spinach", "cheese", "onion"], instructions: ["Whisk the eggs with a pinch of salt.", "Cook sliced onion and spinach in a pan until soft.", "Add eggs and cheese; fold when just set."] },
+      { id: "chickpea-bowl", name: "Lemony chickpea bowl", emoji: "🥗", time: 15, category: "Fresh favorite", description: "A satisfying bowl with crunchy vegetables and lemon.", ingredients: ["chickpeas", "cucumber", "tomatoes", "lemon"], instructions: ["Rinse and drain the chickpeas.", "Chop the cucumber and tomatoes.", "Toss everything with lemon juice, olive oil, salt and pepper."] },
+      { id: "crispy-potatoes", name: "Crispy herby potatoes", emoji: "🥔", time: 35, category: "Crowd pleaser", description: "Golden potatoes with a simple, savory seasoning.", ingredients: ["potatoes", "olive oil", "garlic", "herbs"], instructions: ["Heat the oven to 220°C / 425°F.", "Cut potatoes into bite-sized pieces and toss with oil, garlic and herbs.", "Roast for 25–30 minutes, turning once, until golden."] },
+      { id: "spinach-smoothie", name: "Green morning smoothie", emoji: "🥤", time: 5, category: "Fresh start", description: "A quick, refreshing blend for busy mornings.", ingredients: ["spinach", "banana", "yogurt", "milk"], instructions: ["Add spinach, banana, yogurt and milk to a blender.", "Blend until smooth, adding a splash more milk if needed.", "Taste and adjust to your preference."] },
+      { id: "cheesy-toast", name: "Tomato cheese toast", emoji: "🥪", time: 10, category: "Quick & easy", description: "A warm, crisp snack made from everyday staples.", ingredients: ["bread", "tomatoes", "cheese", "olive oil"], instructions: ["Toast the bread lightly.", "Top with sliced tomato and cheese.", "Broil or air-fry until the cheese melts; finish with a little olive oil."] },
+      { id: "bean-tacos", name: "Easy black bean tacos", emoji: "🌮", time: 18, category: "Weeknight win", description: "Quick, hearty tacos with a fresh squeeze of lime.", ingredients: ["black beans", "tortillas", "lime", "onion"], instructions: ["Warm and lightly mash the black beans with seasoning.", "Heat the tortillas in a dry pan.", "Fill tortillas and top with onion and lime juice."] },
+      { id: "apple-oats", name: "Cozy apple oats", emoji: "🥣", time: 10, category: "Breakfast", description: "Comforting oats with sweet apple and cinnamon.", ingredients: ["oats", "apple", "milk", "cinnamon"], instructions: ["Add oats and milk to a small saucepan.", "Simmer gently, stirring, until creamy.", "Top with chopped apple and cinnamon."] }
+    ];
+
+    const storageKey = "fridgechef-prototype-v1";
+    const sampleIngredients = ["tomatoes", "garlic", "pasta", "spinach", "eggs", "cheese"];
+    const defaults = { pantry: [], favorites: [], shopping: [] };
+    let state = loadState();
+    let activeTab = "recipes";
+    let toastTimer;
+    const escapeHtml = (value) => String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+
+    function loadState() {
+      try {
+        const stored = JSON.parse(localStorage.getItem(storageKey) || "{}");
+        return {
+          pantry: Array.isArray(stored.pantry) ? stored.pantry.filter(x => typeof x === "string") : defaults.pantry,
+          favorites: Array.isArray(stored.favorites) ? stored.favorites.filter(x => typeof x === "string") : defaults.favorites,
+          shopping: Array.isArray(stored.shopping) ? stored.shopping.filter(x => x && typeof x.name === "string").map(x => ({ name: x.name, checked: Boolean(x.checked) })) : defaults.shopping
+        };
+      } catch {
+        return { ...defaults };
+      }
+    }
+    function saveState() {
+      try { localStorage.setItem(storageKey, JSON.stringify(state)); }
+      catch { showToast("Could not save changes on this device."); }
+    }
+    function normalize(value) { return value.trim().toLocaleLowerCase(); }
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove("show"), 2300);
+    }
+    function renderPantry() {
+      const host = document.getElementById("pantry-chips");
+      document.getElementById("pantry-count").textContent = state.pantry.length;
+      document.getElementById("pantry-empty").hidden = state.pantry.length > 0;
+      host.innerHTML = state.pantry.map((name, index) => `<span class="chip">${escapeHtml(name)}<button type="button" data-remove-pantry="${index}" aria-label="Remove ${escapeHtml(name)}">×</button></span>`).join("");
+      host.querySelectorAll("[data-remove-pantry]").forEach(button => button.addEventListener("click", () => {
+        state.pantry.splice(Number(button.dataset.removePantry), 1);
+        saveState(); render();
+      }));
+    }
+    function recipeCard(recipe) {
+      const have = recipe.ingredients.filter(item => state.pantry.some(pantryItem => normalize(pantryItem) === item));
+      const missing = recipe.ingredients.filter(item => !have.includes(item));
+      const selected = state.favorites.includes(recipe.id);
+      const tags = recipe.ingredients.map(item => `<span class="mini-tag ${missing.includes(item) ? "missing" : ""}">${missing.includes(item) ? "＋ " : "✓ "}${escapeHtml(item)}</span>`).join("");
+      return `<article class="recipe-card">
+        <div class="recipe-art"><span aria-hidden="true">${recipe.emoji}</span><button class="favorite ${selected ? "active" : ""}" type="button" data-favorite="${recipe.id}" aria-label="${selected ? "Remove from" : "Add to"} favorites" aria-pressed="${selected}">${selected ? "♥" : "♡"}</button></div>
+        <div class="recipe-body">
+          <div class="recipe-meta"><span>${escapeHtml(recipe.category)}</span><span>◷ ${recipe.time} min</span></div>
+          <h3>${escapeHtml(recipe.name)}</h3>
+          <p class="description">${escapeHtml(recipe.description)}</p>
+          <div class="recipe-meta"><span class="match">${have.length} of ${recipe.ingredients.length} ingredients</span>${missing.length ? `<span>${missing.length} to get</span>` : "<span>Ready to make</span>"}</div>
+          <div class="recipe-ingredients">${tags}</div>
+          <div class="recipe-actions">${missing.length ? `<button class="primary" type="button" data-add-missing="${recipe.id}">Add missing to list</button>` : `<button class="primary" type="button" data-cooked="${recipe.id}">I have everything</button>`}</div>
+          <details class="instructions"><summary>See simple steps</summary><ol>${recipe.instructions.map(step => `<li>${escapeHtml(step)}</li>`).join("")}</ol></details>
+        </div>
+      </article>`;
+    }
+    function renderRecipes() {
+      const isSaved = activeTab === "saved";
+      document.getElementById("results-title").textContent = isSaved ? "Your saved recipes" : "A few good ideas";
+      document.getElementById("results-subtitle").textContent = isSaved ? "The recipes you want to come back to." : state.pantry.length ? "Matched to the ingredients in your kitchen." : "Add ingredients or explore these simple favorites.";
+      const query = normalize(document.getElementById("recipe-search").value);
+      const filtered = recipes.filter(recipe => (!isSaved || state.favorites.includes(recipe.id)) &&
+        (!query || normalize(recipe.name).includes(query) || normalize(recipe.ingredients.join(" ")).includes(query)))
+        .sort((a, b) => {
+          const score = recipe => recipe.ingredients.filter(item => state.pantry.some(x => normalize(x) === item)).length;
+          return score(b) - score(a);
+        });
+      document.getElementById("recipe-grid").innerHTML = filtered.length ? filtered.map(recipeCard).join("") :
+        `<div class="empty-state"><strong>${isSaved ? "Nothing saved just yet." : "No recipes found."}</strong>${isSaved ? "Tap the heart on a recipe to keep it here." : "Try another search or add a few ingredients."}</div>`;
+      document.querySelectorAll("[data-favorite]").forEach(button => button.addEventListener("click", () => {
+        const id = button.dataset.favorite;
+        state.favorites = state.favorites.includes(id) ? state.favorites.filter(item => item !== id) : [...state.favorites, id];
+        saveState(); render();
+        showToast(state.favorites.includes(id) ? "Saved for later." : "Removed from saved recipes.");
+      }));
+      document.querySelectorAll("[data-add-missing]").forEach(button => button.addEventListener("click", () => {
+        const recipe = recipes.find(item => item.id === button.dataset.addMissing);
+        const missing = recipe.ingredients.filter(item => !state.pantry.some(x => normalize(x) === item));
+        let added = 0;
+        missing.forEach(name => {
+          if (!state.shopping.some(item => normalize(item.name) === name)) {
+            state.shopping.push({ name, checked: false });
+            added++;
+          }
+        });
+        saveState(); render();
+        showToast(added ? `${added} item${added === 1 ? "" : "s"} added to your list.` : "Those ingredients are already on your list.");
+      }));
+      document.querySelectorAll("[data-cooked]").forEach(button => button.addEventListener("click", () => showToast("Enjoy your meal!")));
+    }
+    function renderShopping() {
+      document.getElementById("shopping-list").innerHTML = state.shopping.length ? state.shopping.map((item, index) =>
+        `<label class="shopping-item ${item.checked ? "checked" : ""}"><input type="checkbox" data-check="${index}" ${item.checked ? "checked" : ""}><span>${escapeHtml(item.name)}</span><button type="button" data-remove-shopping="${index}" aria-label="Remove ${escapeHtml(item.name)}">×</button></label>`).join("") :
+        `<div class="empty-state"><strong>Your list is empty.</strong>Add an item, or add missing ingredients from a recipe.</div>`;
+      document.querySelectorAll("[data-check]").forEach(input => input.addEventListener("change", () => {
+        state.shopping[Number(input.dataset.check)].checked = input.checked; saveState(); renderShopping();
+      }));
+      document.querySelectorAll("[data-remove-shopping]").forEach(button => button.addEventListener("click", event => {
+        event.preventDefault();
+        state.shopping.splice(Number(button.dataset.removeShopping), 1); saveState(); render();
+      }));
+    }
+    function render() {
+      renderPantry();
+      renderShopping();
+      document.getElementById("saved-count").textContent = state.favorites.length ? `(${state.favorites.length})` : "";
+      document.getElementById("shopping-count").textContent = state.shopping.length ? `(${state.shopping.length})` : "";
+      const shopping = activeTab === "shopping";
+      document.getElementById("recipe-view").hidden = shopping;
+      document.getElementById("shopping-view").hidden = !shopping;
+      document.getElementById("tab-recipes").setAttribute("aria-selected", String(activeTab === "recipes"));
+      document.getElementById("tab-saved").setAttribute("aria-selected", String(activeTab === "saved"));
+      document.getElementById("tab-shopping").setAttribute("aria-selected", String(shopping));
+      if (!shopping) renderRecipes();
+    }
+    function addPantryItem(value) {
+      const cleaned = value.trim().replace(/\s+/g, " ");
+      if (!cleaned) return false;
+      if (state.pantry.some(item => normalize(item) === normalize(cleaned))) {
+        showToast("That ingredient is already in your kitchen.");
+        return false;
+      }
+      state.pantry.push(cleaned);
+      saveState(); render(); return true;
+    }
+    document.getElementById("ingredient-form").addEventListener("submit", event => {
+      event.preventDefault();
+      const input = document.getElementById("ingredient-input");
+      if (addPantryItem(input.value)) input.value = "";
+    });
+    document.getElementById("load-sample").addEventListener("click", () => {
+      sampleIngredients.forEach(name => {
+        if (!state.pantry.some(item => normalize(item) === name)) state.pantry.push(name);
+      });
+      saveState(); render(); showToast("Sample ingredients added.");
+    });
+    document.getElementById("recipe-search").addEventListener("input", renderRecipes);
+    document.getElementById("tab-recipes").addEventListener("click", () => { activeTab = "recipes"; render(); });
+    document.getElementById("tab-saved").addEventListener("click", () => { activeTab = "saved"; render(); });
+    document.getElementById("tab-shopping").addEventListener("click", () => { activeTab = "shopping"; render(); });
+    document.getElementById("shopping-form").addEventListener("submit", event => {
+      event.preventDefault();
+      const input = document.getElementById("shopping-input");
+      const name = input.value.trim().replace(/\s+/g, " ");
+      if (!name) return;
+      if (state.shopping.some(item => normalize(item.name) === normalize(name))) {
+        showToast("That item is already on your list."); return;
+      }
+      state.shopping.push({ name, checked: false });
+      input.value = ""; saveState(); render();
+    });
+    document.getElementById("clear-checked").addEventListener("click", () => {
+      state.shopping = state.shopping.filter(item => !item.checked); saveState(); render();
+    });
+    render();
+  </script>
+</body>
+</html>

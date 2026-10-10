@@ -94,6 +94,7 @@
     .recipe-actions { display: flex; gap: 8px; }
     .primary, .secondary { min-height: 37px; padding: 0 11px; border-radius: 10px; font-size: 11px; font-weight: 750; }
     .primary { flex: 1; border: 0; color: white; background: var(--green); }
+    .primary:disabled { color: white; background: #77877c; cursor: default; }
     .secondary { border: 1px solid var(--line); color: var(--green); background: white; }
     .instructions { padding-top: 13px; color: #5e6c63; font-size: 12px; line-height: 1.6; }
     .instructions summary { color: var(--green); font-weight: 750; cursor: pointer; }
@@ -191,8 +192,8 @@
       <section class="content" aria-label="Recipe ideas">
         <div class="tabs-row" role="tablist" aria-label="Recipe sections">
           <button class="tab" role="tab" id="tab-recipes" aria-selected="true" aria-controls="recipe-view" type="button">For you</button>
-          <button class="tab" role="tab" id="tab-saved" aria-selected="false" aria-controls="recipe-view" tabindex="-1" type="button">Saved <span id="saved-count"></span></button>
-          <button class="tab" role="tab" id="tab-shopping" aria-selected="false" aria-controls="shopping-view" tabindex="-1" type="button">Shopping list <span id="shopping-count"></span></button>
+          <button class="tab" role="tab" id="tab-saved" aria-selected="false" tabindex="-1" type="button">Saved <span id="saved-count"></span></button>
+          <button class="tab" role="tab" id="tab-shopping" aria-selected="false" tabindex="-1" type="button">Shopping list <span id="shopping-count"></span></button>
         </div>
         <section id="recipe-view" role="tabpanel" aria-labelledby="tab-recipes" tabindex="0">
           <div class="results-heading">
@@ -301,6 +302,7 @@
     function recipeCard(recipe) {
       const have = recipe.ingredients.filter(hasIngredient);
       const missing = recipe.ingredients.filter(item => !hasIngredient(item));
+      const missingToAdd = missing.filter(name => !state.shopping.some(item => canonicalIngredient(item.name) === canonicalIngredient(name)));
       const selected = state.favorites.includes(recipe.id);
       const tags = recipe.ingredients.map(item => `<span class="mini-tag ${missing.includes(item) ? "missing" : ""}">${missing.includes(item) ? "＋ " : "✓ "}${escapeHtml(item)}</span>`).join("");
       return `<article class="recipe-card" data-recipe-id="${recipe.id}">
@@ -311,7 +313,7 @@
           <p class="description">${escapeHtml(recipe.description)}</p>
           <div class="recipe-meta"><span class="match">${have.length} of ${recipe.ingredients.length} ingredients</span>${missing.length ? `<span>${missing.length} to get</span>` : "<span>Ready to make</span>"}</div>
           <div class="recipe-ingredients">${tags}</div>
-          <div class="recipe-actions">${missing.length ? `<button class="primary" type="button" data-add-missing="${recipe.id}">Add missing to list</button>` : `<button class="primary" type="button" data-cook="${recipe.id}">Start cooking</button>`}</div>
+          <div class="recipe-actions">${missing.length ? `<button class="primary" type="button" data-add-missing="${recipe.id}" ${missingToAdd.length ? "" : "disabled"}>${missingToAdd.length ? "Add missing to list" : "On your shopping list"}</button>` : `<button class="primary" type="button" data-cook="${recipe.id}">Start cooking</button>`}</div>
           <details class="instructions"><summary>See simple steps</summary><ol>${recipe.instructions.map(step => `<li>${escapeHtml(step)}</li>`).join("")}</ol></details>
         </div>
       </article>`;
@@ -417,7 +419,13 @@
           }
         });
         saveState(); render();
-        document.querySelector(`[data-add-missing="${recipe.id}"]`)?.focus();
+        const action = document.querySelector(`[data-add-missing="${recipe.id}"]`);
+        if (action && !action.disabled) action.focus();
+        else {
+          const heading = document.querySelector(`[data-recipe-id="${recipe.id}"] h3`);
+          heading.tabIndex = -1;
+          heading.focus();
+        }
         showToast(added ? `${added} item${added === 1 ? "" : "s"} added to your list.` : "Those ingredients are already on your list.");
         return;
       }

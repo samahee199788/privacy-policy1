@@ -270,11 +270,16 @@
       herb: "herb", herbs: "herb", oat: "oat", oats: "oat",
       tortilla: "tortilla", tortillas: "tortilla", apple: "apple", apples: "apple",
       lemon: "lemon", lemons: "lemon", cucumber: "cucumber", cucumbers: "cucumber",
-      "black bean": "black bean", "black beans": "black bean"
+      "black bean": "black bean", "black beans": "black bean",
+      "garlic clove": "garlic", "garlic cloves": "garlic"
     };
     function canonicalIngredient(name) {
       const key = normalize(name);
-      return ingredientAliases[key] || key;
+      if (ingredientAliases[key]) return ingredientAliases[key];
+      const words = key.split(/\s+/);
+      const last = words.pop();
+      const singular = last.endsWith("ies") ? `${last.slice(0, -3)}y` : last.endsWith("s") && !last.endsWith("ss") ? last.slice(0, -1) : last;
+      return [...words, singular].join(" ");
     }
     function hasIngredient(name) {
       return pantryIngredients.has(canonicalIngredient(name));
@@ -297,7 +302,7 @@
       const missing = recipe.ingredients.filter(item => !hasIngredient(item));
       const selected = state.favorites.includes(recipe.id);
       const tags = recipe.ingredients.map(item => `<span class="mini-tag ${missing.includes(item) ? "missing" : ""}">${missing.includes(item) ? "＋ " : "✓ "}${escapeHtml(item)}</span>`).join("");
-      return `<article class="recipe-card">
+      return `<article class="recipe-card" data-recipe-id="${recipe.id}">
         <div class="recipe-art"><span aria-hidden="true">${recipe.emoji}</span><button class="favorite ${selected ? "active" : ""}" type="button" data-favorite="${recipe.id}" aria-label="${selected ? "Remove from" : "Add to"} favorites" aria-pressed="${selected}">${selected ? "♥" : "♡"}</button></div>
         <div class="recipe-body">
           <div class="recipe-meta"><span>${escapeHtml(recipe.category)}</span><span>◷ ${recipe.time} min</span></div>
@@ -312,6 +317,7 @@
     }
     function renderRecipes() {
       const isSaved = activeTab === "saved";
+      const openInstructions = new Set([...document.querySelectorAll(".recipe-card details[open]")].map(details => details.closest(".recipe-card").dataset.recipeId));
       document.getElementById("results-title").textContent = isSaved ? "Your saved recipes" : "A few good ideas";
       document.getElementById("results-subtitle").textContent = isSaved ? "The recipes you want to come back to." : state.pantry.length ? "Matched to the ingredients in your kitchen." : "Add ingredients or explore these simple favorites.";
       const query = normalize(document.getElementById("recipe-search").value);
@@ -323,6 +329,9 @@
         });
       document.getElementById("recipe-grid").innerHTML = filtered.length ? filtered.map(recipeCard).join("") :
         `<div class="empty-state"><strong>${isSaved ? "Nothing saved just yet." : "No recipes found."}</strong>${isSaved ? "Tap the heart on a recipe to keep it here." : "Try another search or add a few ingredients."}</div>`;
+      document.querySelectorAll(".recipe-card details.instructions").forEach(details => {
+        if (openInstructions.has(details.closest(".recipe-card").dataset.recipeId)) details.open = true;
+      });
     }
     function renderShopping() {
       document.getElementById("shopping-list").innerHTML = state.shopping.length ? state.shopping.map((item, index) =>
@@ -342,7 +351,12 @@
       document.getElementById("tab-recipes").setAttribute("aria-selected", String(activeTab === "recipes"));
       document.getElementById("tab-saved").setAttribute("aria-selected", String(activeTab === "saved"));
       document.getElementById("tab-shopping").setAttribute("aria-selected", String(shopping));
-      document.querySelectorAll('[role="tab"]').forEach(tab => tab.tabIndex = tab.getAttribute("aria-selected") === "true" ? 0 : -1);
+      document.querySelectorAll('[role="tab"]').forEach(tab => {
+        const selected = tab.getAttribute("aria-selected") === "true";
+        tab.tabIndex = selected ? 0 : -1;
+        tab.removeAttribute("aria-controls");
+        if (selected) tab.setAttribute("aria-controls", shopping ? "shopping-view" : "recipe-view");
+      });
       if (!shopping) renderRecipes();
     }
     function addPantryItem(value) {
@@ -406,8 +420,9 @@
       }
       const cookButton = event.target.closest("[data-cook]");
       if (cookButton) {
-        const summary = cookButton.closest(".recipe-card").querySelector(".instructions summary");
-        summary.parentElement.open = true;
+        const details = cookButton.closest(".recipe-card").querySelector("details.instructions");
+        const summary = details.querySelector("summary");
+        details.open = true;
         summary.focus();
         const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
         summary.scrollIntoView({ behavior, block: "center" });

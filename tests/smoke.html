@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FridgeChef browser smoke tests</title>
+  <style>
+    body { margin: 2rem; font: 16px system-ui, sans-serif; color: #24352c; }
+    #result { padding: 1rem; border-radius: .75rem; background: #eff4e6; }
+    iframe { position: absolute; width: 1px; height: 1px; border: 0; }
+  </style>
+</head>
+<body>
+  <h1>FridgeChef smoke tests</h1>
+  <p id="result" role="status" aria-live="polite">Running…</p>
+  <iframe id="app" title="FridgeChef test app"></iframe>
+  <script>
+    const result = document.getElementById("result");
+    const frame = document.getElementById("app");
+    const tests = [];
+    function assert(condition, message) {
+      if (!condition) throw new Error(message);
+      tests.push(message);
+    }
+    function appDocument() { return frame.contentDocument; }
+    function addPantry(name) {
+      const doc = appDocument();
+      doc.getElementById("ingredient-input").value = name;
+      doc.getElementById("ingredient-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    }
+    function recipe(id) { return appDocument().querySelector(`[data-recipe-id="${id}"]`); }
+    function finish() {
+      result.textContent = `PASS — ${tests.length} browser checks`;
+    }
+    function fail(error) {
+      result.textContent = `FAIL — ${error.message}`;
+      result.style.background = "#f8e5e2";
+    }
+    localStorage.removeItem("fridgechef-prototype-v1");
+    frame.src = "../index.html";
+    frame.addEventListener("load", () => {
+      try {
+        const doc = appDocument();
+        addPantry("tomato");
+        addPantry("tomatoes");
+        assert(doc.querySelectorAll(".chip").length === 1, "singular/plural duplicate prevention");
+        assert(recipe("tomato-pasta").querySelector(".match").textContent.includes("1 of 4"), "singular tomato matches recipe");
+        doc.getElementById("load-sample").click();
+        assert(doc.querySelectorAll(".chip").length === 6, "sample ingredients avoid aliases already in pantry");
+        addPantry("onions");
+        assert(recipe("garden-omelette").querySelector(".match").textContent.includes("4 of 4"), "plural onion matches recipe");
+        addPantry("black bean");
+        assert(recipe("bean-tacos").querySelector(".match").textContent.includes("2 of 4"), "black bean matches black beans");
+
+        const pasta = recipe("tomato-pasta");
+        pasta.querySelector("details summary").click();
+        pasta.querySelector("[data-favorite]").click();
+        assert(recipe("tomato-pasta").querySelector("details").open, "recipe instructions remain open after favorite action");
+        assert(doc.activeElement.matches("[data-favorite]"), "keyboard focus remains on updated favorite");
+        recipe("tomato-pasta").querySelector("[data-add-missing]").click();
+        assert(doc.activeElement.matches("[data-add-missing]"), "keyboard focus remains on shopping action");
+        doc.getElementById("tab-shopping").click();
+        assert(doc.getElementById("shopping-list").textContent.includes("olive oil"), "recipe missing ingredient added to shopping list");
+
+        const shoppingInput = doc.getElementById("shopping-input");
+        for (const name of ["tomato", "tomatoes"]) {
+          shoppingInput.value = name;
+          doc.getElementById("shopping-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        }
+        assert(doc.querySelectorAll(".shopping-item").length === 2, "shopping list deduplicates ingredient aliases");
+        const checkbox = doc.querySelector("[data-check]");
+        checkbox.click();
+        assert(checkbox.closest(".shopping-item").classList.contains("checked"), "shopping check state updates");
+        doc.getElementById("clear-checked").click();
+
+        frame.addEventListener("load", () => {
+          try {
+            const reloaded = appDocument();
+            assert(reloaded.querySelectorAll(".chip").length === 8, "pantry persists after reload");
+            assert(reloaded.querySelectorAll(".shopping-item").length === 1, "shopping list persists after reload");
+            reloaded.getElementById("recipe-search").value = "no matching recipe";
+            reloaded.getElementById("recipe-search").dispatchEvent(new Event("input", { bubbles: true }));
+            reloaded.getElementById("tab-saved").click();
+            assert(reloaded.getElementById("recipe-search").value === "", "tab change clears stale recipe search");
+            assert(reloaded.querySelectorAll(".recipe-card").length === 1, "saved recipe appears after reload");
+            const tabs = [...reloaded.querySelectorAll('[role="tab"]')];
+            tabs[1].focus();
+            tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+            assert(tabs[2].getAttribute("aria-selected") === "true", "arrow key changes active tab");
+            assert(tabs[2].getAttribute("aria-controls") === "shopping-view", "selected tab points to its panel");
+            assert(!tabs[1].hasAttribute("aria-controls"), "inactive tab does not claim another panel");
+            finish();
+          } catch (error) { fail(error); }
+        }, { once: true });
+        frame.contentWindow.location.reload();
+      } catch (error) { fail(error); }
+    }, { once: true });
+  </script>
+</body>
+</html>

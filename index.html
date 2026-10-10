@@ -301,7 +301,8 @@
     function singularize(word) {
       if (singularExceptions.has(word)) return word;
       if (word.endsWith("ies")) return `${word.slice(0, -3)}y`;
-      if (word.endsWith("s") && !word.endsWith("ss")) return word.slice(0, -1);
+      if (word.endsWith("oes") || /(sh|ch|x|z)es$/.test(word) || word.endsWith("sses")) return word.slice(0, -2);
+      if (word.endsWith("s") && !/(ss|us|is)$/.test(word)) return word.slice(0, -1);
       return word;
     }
     function canonicalIngredient(name) {
@@ -312,6 +313,9 @@
       return [...words, singularize(last)].join(" ");
     }
     const canonicalRecipeIngredients = new Map(recipes.map(recipe => [recipe.id, recipe.ingredients.map(canonicalIngredient)]));
+    function matchCount(recipe) {
+      return canonicalRecipeIngredients.get(recipe.id).filter(name => pantryIngredients.has(name)).length;
+    }
     function hasRecipeIngredient(recipe, index) {
       return pantryIngredients.has(canonicalRecipeIngredients.get(recipe.id)[index]);
     }
@@ -335,7 +339,7 @@
       host.innerHTML = state.pantry.map(name => `<span class="chip">${escapeHtml(name)}<button type="button" data-remove-pantry="${escapeHtml(canonicalIngredient(name))}" aria-label="Remove ${escapeHtml(name)}">×</button></span>`).join("");
     }
     function recipeCard(recipe) {
-      const have = recipe.ingredients.filter((item, index) => hasRecipeIngredient(recipe, index));
+      const haveCount = matchCount(recipe);
       const missing = missingIngredients(recipe);
       const missingToAdd = missing.filter(name => !isOnShoppingList(name));
       const selected = state.favorites.includes(recipe.id);
@@ -350,7 +354,7 @@
           <div class="recipe-meta"><span>${escapeHtml(recipe.category)}</span><span>◷ ${recipe.time} min</span></div>
           <h3>${escapeHtml(recipe.name)}</h3>
           <p class="description">${escapeHtml(recipe.description)}</p>
-          <div class="recipe-meta"><span class="match">${have.length} of ${recipe.ingredients.length} ingredients</span>${missing.length ? `<span>${missing.length} to get</span>` : "<span>Ready to make</span>"}</div>
+          <div class="recipe-meta"><span class="match">${haveCount} of ${recipe.ingredients.length} ingredients</span>${missing.length ? `<span>${missing.length} to get</span>` : "<span>Ready to make</span>"}</div>
           <div class="recipe-ingredients">${tags}</div>
           <div class="recipe-actions">${missing.length ? `<button class="primary" type="button" data-add-missing="${recipeId}" ${missingToAdd.length ? "" : "disabled"}>${missingToAdd.length ? "Add missing to list" : "On your shopping list"}</button>` : `<button class="primary" type="button" data-cook="${recipeId}">Start cooking</button>`}</div>
           <details class="instructions"><summary>See simple steps</summary><ol>${recipe.instructions.map(step => `<li>${escapeHtml(step)}</li>`).join("")}</ol></details>
@@ -366,7 +370,7 @@
       const query = normalize(document.getElementById(isSaved ? "saved-search" : "recipe-search").value);
       const filtered = recipes.map(recipe => ({
         recipe,
-        score: recipe.ingredients.filter((item, index) => hasRecipeIngredient(recipe, index)).length
+        score: matchCount(recipe)
       })).filter(({ recipe }) => (!isSaved || state.favorites.includes(recipe.id)) &&
         (!query || normalize(recipe.name).includes(query) || normalize(recipe.ingredients.join(" ")).includes(query)))
         .sort((a, b) => b.score - a.score)

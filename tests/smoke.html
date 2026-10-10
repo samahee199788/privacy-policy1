@@ -33,6 +33,25 @@
       tests.push(message);
     }
     function appDocument() { return frame.contentDocument; }
+    function clearAppStorage() {
+      try {
+        const storageKey = appDocument()?.documentElement.dataset.storageKey;
+        if (storageKey) frame.contentWindow.localStorage.removeItem(storageKey);
+      } catch { }
+    }
+    function waitForCondition(condition, description, timeoutMs = 2000) {
+      return new Promise((resolve, reject) => {
+        const deadline = Date.now() + timeoutMs;
+        const check = () => {
+          try {
+            if (condition()) return resolve();
+            if (Date.now() >= deadline) return reject(new Error(`Timed out waiting for ${description}.`));
+            setTimeout(check, 20);
+          } catch (error) { reject(error); }
+        };
+        check();
+      });
+    }
     function addPantry(name) {
       const doc = appDocument();
       doc.getElementById("ingredient-input").value = name;
@@ -41,10 +60,12 @@
     function recipe(id) { return appDocument().querySelector(`[data-recipe-id="${id}"]`); }
     function finish() {
       clearTimeout(loadTimeout);
+      clearAppStorage();
       result.textContent = `PASS — ${tests.length} browser checks`;
     }
     function fail(error) {
       clearTimeout(loadTimeout);
+      clearAppStorage();
       result.textContent = `FAIL — ${error.message}`;
       result.style.background = "#f8e5e2";
     }
@@ -52,7 +73,7 @@
       try {
         const storageKey = appDocument().documentElement.dataset.storageKey;
         if (!storageKey) throw new Error("App storage key is missing.");
-        localStorage.setItem(storageKey, "{invalid json");
+        frame.contentWindow.localStorage.setItem(storageKey, "{invalid json");
         waitForFrameLoad(checkCorruptStorageFallback, "reloading with corrupted storage");
         frame.contentWindow.location.reload();
       } catch (error) { fail(error); }
@@ -62,7 +83,7 @@
         const doc = appDocument();
         assert(doc.querySelectorAll(".chip").length === 0, "corrupted storage falls back to an empty pantry");
         assert(doc.querySelectorAll(".recipe-card").length > 0, "corrupted storage still loads the app");
-        localStorage.removeItem(doc.documentElement.dataset.storageKey);
+        frame.contentWindow.localStorage.removeItem(doc.documentElement.dataset.storageKey);
         waitForFrameLoad(runTests, "reloading with clean storage");
         frame.contentWindow.location.reload();
       } catch (error) { fail(error); }
@@ -79,8 +100,13 @@
       addPantry("tomatoes");
       assert(doc.querySelectorAll(".chip").length === 1, "singular/plural duplicate prevention");
       assert(recipe("tomato-pasta").querySelector(".match").textContent.includes("1 of 4"), "singular tomato matches recipe");
+      addPantry("radishes");
+      addPantry("radish");
+      addPantry("mangoes");
+      addPantry("mango");
+      assert(doc.querySelectorAll(".chip").length === 3, "shes and oes ingredient plurals normalize");
       doc.getElementById("load-sample").click();
-      assert(doc.querySelectorAll(".chip").length === 6, "sample ingredients avoid aliases already in pantry");
+      assert(doc.querySelectorAll(".chip").length === 8, "sample ingredients avoid aliases already in pantry");
       addPantry("onions");
       assert(recipe("garden-omelette").querySelector(".match").textContent.includes("4 of 4"), "plural onion matches recipe");
       const omelette = recipe("garden-omelette");
@@ -122,13 +148,13 @@
       doc.getElementById("clear-checked").click();
     }
     function testPersistence(doc) {
-      assert(doc.querySelectorAll(".chip").length === 8, "pantry persists after reload");
+      assert(doc.querySelectorAll(".chip").length === 10, "pantry persists after reload");
       assert(doc.querySelectorAll(".shopping-item").length === 1, "shopping list persists after reload");
     }
     async function testSearchAndTabs(doc) {
       doc.getElementById("recipe-search").value = "no matching recipe";
       doc.getElementById("recipe-search").dispatchEvent(new Event("input", { bubbles: true }));
-      await new Promise(resolve => setTimeout(resolve, 150));
+      await waitForCondition(() => doc.querySelector(".empty-state strong")?.textContent === "No recipes found.", "no-results state");
       assert(doc.querySelector(".empty-state strong").textContent === "No recipes found.", "empty search shows a no-results message");
       doc.getElementById("tab-saved").click();
       assert(doc.getElementById("recipe-search").value === "" && doc.getElementById("saved-search").value === "", "tab change clears stale searches");
@@ -150,6 +176,12 @@
       tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
       assert(doc.activeElement === tabs[1], "ArrowRight moves focus from the first tab");
       assert(tabs[1].getAttribute("aria-selected") === "true", "arrow navigation keeps the selected tab unchanged");
+      tabs[0].focus();
+      tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      assert(doc.activeElement === tabs[2], "ArrowLeft wraps from the first to last tab");
+      tabs[2].focus();
+      tabs[2].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      assert(doc.activeElement === tabs[0], "ArrowRight wraps from the last to first tab");
       doc.getElementById("saved-search").value = "onion";
       tabs[2].focus();
       tabs[2].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));

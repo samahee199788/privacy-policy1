@@ -49,9 +49,10 @@
     .count { min-width: 26px; height: 26px; padding: 0 7px; display: grid; place-items: center; color: var(--green); background: #eff4e6; border-radius: 20px; font-size: 12px; font-weight: 800; }
     .hint { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0 0 15px; }
     .ingredient-form { display: flex; gap: 8px; }
-    .ingredient-form input, .search input { min-width: 0; border: 1px solid var(--line); border-radius: 11px; background: #fff; color: var(--ink); outline: none; }
+    .ingredient-form input, .search input { min-width: 0; border: 1px solid var(--line); border-radius: 11px; background: #fff; color: var(--ink); }
     .ingredient-form input { width: 100%; height: 42px; padding: 0 12px; font-size: 13px; }
     input:focus { border-color: #78a789; box-shadow: 0 0 0 3px rgba(39, 99, 74, .1); }
+    button:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid #668f36; outline-offset: 3px; }
     .add-button { height: 42px; width: 44px; flex: 0 0 44px; color: white; border: 0; border-radius: 11px; background: var(--green); font-size: 23px; line-height: 1; }
     .add-button:hover, .primary:hover { background: var(--green-dark); }
     .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }
@@ -184,12 +185,12 @@
         </section>
       </aside>
       <section class="content" aria-label="Recipe ideas">
-        <div class="tabs-row" role="group" aria-label="Recipe sections">
-          <button class="tab" id="tab-recipes" aria-pressed="true" type="button">For you</button>
-          <button class="tab" id="tab-saved" aria-pressed="false" type="button">Saved <span id="saved-count"></span></button>
-          <button class="tab" id="tab-shopping" aria-pressed="false" type="button">Shopping list <span id="shopping-count"></span></button>
+        <div class="tabs-row" role="tablist" aria-label="Recipe sections">
+          <button class="tab" role="tab" id="tab-recipes" aria-selected="true" aria-controls="recipe-view" type="button">For you</button>
+          <button class="tab" role="tab" id="tab-saved" aria-selected="false" aria-controls="recipe-view" tabindex="-1" type="button">Saved <span id="saved-count"></span></button>
+          <button class="tab" role="tab" id="tab-shopping" aria-selected="false" aria-controls="shopping-view" tabindex="-1" type="button">Shopping list <span id="shopping-count"></span></button>
         </div>
-        <section id="recipe-view">
+        <section id="recipe-view" role="tabpanel" aria-labelledby="tab-recipes" tabindex="0">
           <div class="results-heading">
             <div>
               <h2 id="results-title">A few good ideas</h2>
@@ -202,7 +203,7 @@
           </div>
           <div class="recipe-grid" id="recipe-grid" aria-live="polite"></div>
         </section>
-        <section class="panel" id="shopping-view" hidden>
+        <section class="panel" id="shopping-view" role="tabpanel" aria-labelledby="tab-shopping" tabindex="0" hidden>
           <div class="panel-heading">
             <h2>Your shopping list</h2>
             <button class="text-button" id="clear-checked" type="button">Clear checked</button>
@@ -238,6 +239,7 @@
     const emptyState = () => ({ pantry: [], favorites: [], shopping: [] });
     let state = loadState();
     let activeTab = "recipes";
+    let pantryIngredients = new Set();
     let toastTimer;
     const escapeHtml = (value) => String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 
@@ -259,9 +261,12 @@
     }
     function normalize(value) { return value.trim().toLocaleLowerCase(); }
     const ingredientAliases = { tomato: "tomato", tomatoes: "tomato", egg: "egg", eggs: "egg", potato: "potato", potatoes: "potato", chickpea: "chickpea", chickpeas: "chickpea", herb: "herb", herbs: "herb", oat: "oat", oats: "oat" };
+    function canonicalIngredient(name) {
+      const key = normalize(name);
+      return ingredientAliases[key] || key;
+    }
     function hasIngredient(name) {
-      const target = ingredientAliases[normalize(name)] || normalize(name);
-      return state.pantry.some(item => (ingredientAliases[normalize(item)] || normalize(item)) === target);
+      return pantryIngredients.has(canonicalIngredient(name));
     }
     function showToast(message) {
       const toast = document.getElementById("toast");
@@ -314,6 +319,7 @@
         `<div class="empty-state"><strong>Your list is empty.</strong>Add an item, or add missing ingredients from a recipe.</div>`;
     }
     function render() {
+      pantryIngredients = new Set(state.pantry.map(canonicalIngredient));
       renderPantry();
       renderShopping();
       document.getElementById("saved-count").textContent = state.favorites.length ? `(${state.favorites.length})` : "";
@@ -321,9 +327,11 @@
       const shopping = activeTab === "shopping";
       document.getElementById("recipe-view").hidden = shopping;
       document.getElementById("shopping-view").hidden = !shopping;
-      document.getElementById("tab-recipes").setAttribute("aria-pressed", String(activeTab === "recipes"));
-      document.getElementById("tab-saved").setAttribute("aria-pressed", String(activeTab === "saved"));
-      document.getElementById("tab-shopping").setAttribute("aria-pressed", String(shopping));
+      document.getElementById("recipe-view").setAttribute("aria-labelledby", activeTab === "saved" ? "tab-saved" : "tab-recipes");
+      document.getElementById("tab-recipes").setAttribute("aria-selected", String(activeTab === "recipes"));
+      document.getElementById("tab-saved").setAttribute("aria-selected", String(activeTab === "saved"));
+      document.getElementById("tab-shopping").setAttribute("aria-selected", String(shopping));
+      document.querySelectorAll('[role="tab"]').forEach(tab => tab.tabIndex = tab.getAttribute("aria-selected") === "true" ? 0 : -1);
       if (!shopping) renderRecipes();
     }
     function addPantryItem(value) {
@@ -342,8 +350,13 @@
       if (addPantryItem(input.value)) input.value = "";
     });
     document.getElementById("load-sample").addEventListener("click", () => {
+      const pantrySet = new Set(state.pantry.map(canonicalIngredient));
       sampleIngredients.forEach(name => {
-        if (!state.pantry.some(item => normalize(item) === name)) state.pantry.push(name);
+        const canonical = canonicalIngredient(name);
+        if (!pantrySet.has(canonical)) {
+          state.pantry.push(name);
+          pantrySet.add(canonical);
+        }
       });
       saveState(); render(); showToast("Sample ingredients added.");
     });
@@ -368,7 +381,7 @@
         const missing = recipe.ingredients.filter(item => !hasIngredient(item));
         let added = 0;
         missing.forEach(name => {
-          if (!state.shopping.some(item => normalize(item.name) === name)) {
+          if (!state.shopping.some(item => canonicalIngredient(item.name) === canonicalIngredient(name))) {
             state.shopping.push({ name, checked: false });
             added++;
           }
@@ -405,6 +418,19 @@
     document.getElementById("tab-recipes").addEventListener("click", () => { activeTab = "recipes"; render(); });
     document.getElementById("tab-saved").addEventListener("click", () => { activeTab = "saved"; render(); });
     document.getElementById("tab-shopping").addEventListener("click", () => { activeTab = "shopping"; render(); });
+    document.querySelector('[role="tablist"]').addEventListener("keydown", event => {
+      const tabs = [...document.querySelectorAll('[role="tab"]')];
+      const current = tabs.indexOf(document.activeElement);
+      let next = current;
+      if (event.key === "ArrowRight") next = (current + 1) % tabs.length;
+      else if (event.key === "ArrowLeft") next = (current - 1 + tabs.length) % tabs.length;
+      else if (event.key === "Home") next = 0;
+      else if (event.key === "End") next = tabs.length - 1;
+      else return;
+      event.preventDefault();
+      tabs[next].click();
+      tabs[next].focus();
+    });
     document.getElementById("shopping-form").addEventListener("submit", event => {
       event.preventDefault();
       const input = document.getElementById("shopping-input");

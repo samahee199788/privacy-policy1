@@ -192,8 +192,8 @@
       <section class="content" aria-label="Recipe ideas">
         <div class="tabs-row" role="tablist" aria-label="Recipe sections">
           <button class="tab" role="tab" id="tab-recipes" aria-selected="true" aria-controls="recipe-view" type="button">For you</button>
-          <button class="tab" role="tab" id="tab-saved" aria-selected="false" tabindex="-1" type="button">Saved <span id="saved-count"></span></button>
-          <button class="tab" role="tab" id="tab-shopping" aria-selected="false" tabindex="-1" type="button">Shopping list <span id="shopping-count"></span></button>
+          <button class="tab" role="tab" id="tab-saved" aria-selected="false" aria-controls="recipe-view" tabindex="-1" type="button">Saved <span id="saved-count"></span></button>
+          <button class="tab" role="tab" id="tab-shopping" aria-selected="false" aria-controls="shopping-view" tabindex="-1" type="button">Shopping list <span id="shopping-count"></span></button>
         </div>
         <section id="recipe-view" role="tabpanel" aria-labelledby="tab-recipes" tabindex="0">
           <div class="results-heading">
@@ -275,13 +275,18 @@
       "garlic clove": "garlic", "garlic cloves": "garlic"
     };
     const singularExceptions = new Set(["asparagus", "couscous", "hummus", "molasses", "swiss"]);
+    function singularize(word) {
+      if (singularExceptions.has(word)) return word;
+      if (word.endsWith("ies")) return `${word.slice(0, -3)}y`;
+      if (word.endsWith("s") && !word.endsWith("ss")) return word.slice(0, -1);
+      return word;
+    }
     function canonicalIngredient(name) {
       const key = normalize(name);
       if (ingredientAliases[key]) return ingredientAliases[key];
       const words = key.split(/\s+/);
       const last = words.pop();
-      const singular = singularExceptions.has(last) ? last : last.endsWith("ies") ? `${last.slice(0, -3)}y` : last.endsWith("s") && !last.endsWith("ss") ? last.slice(0, -1) : last;
-      return [...words, singular].join(" ");
+      return [...words, singularize(last)].join(" ");
     }
     function hasIngredient(name) {
       return pantryIngredients.has(canonicalIngredient(name));
@@ -324,12 +329,13 @@
       document.getElementById("results-title").textContent = isSaved ? "Your saved recipes" : "A few good ideas";
       document.getElementById("results-subtitle").textContent = isSaved ? "The recipes you want to come back to." : state.pantry.length ? "Matched to the ingredients in your kitchen." : "Add ingredients or explore these simple favorites.";
       const query = normalize(document.getElementById("recipe-search").value);
-      const filtered = recipes.filter(recipe => (!isSaved || state.favorites.includes(recipe.id)) &&
+      const filtered = recipes.map(recipe => ({
+        recipe,
+        score: recipe.ingredients.filter(hasIngredient).length
+      })).filter(({ recipe }) => (!isSaved || state.favorites.includes(recipe.id)) &&
         (!query || normalize(recipe.name).includes(query) || normalize(recipe.ingredients.join(" ")).includes(query)))
-        .sort((a, b) => {
-          const score = recipe => recipe.ingredients.filter(hasIngredient).length;
-          return score(b) - score(a);
-        });
+        .sort((a, b) => b.score - a.score)
+        .map(({ recipe }) => recipe);
       document.getElementById("recipe-grid").innerHTML = filtered.length ? filtered.map(recipeCard).join("") :
         `<div class="empty-state"><strong>${isSaved ? "Nothing saved just yet." : "No recipes found."}</strong>${isSaved ? "Tap the heart on a recipe to keep it here." : "Try another search or add a few ingredients."}</div>`;
       document.querySelectorAll(".recipe-card details.instructions").forEach(details => {
@@ -357,8 +363,6 @@
       document.querySelectorAll('[role="tab"]').forEach(tab => {
         const selected = tab.getAttribute("aria-selected") === "true";
         tab.tabIndex = selected ? 0 : -1;
-        tab.removeAttribute("aria-controls");
-        if (selected) tab.setAttribute("aria-controls", shopping ? "shopping-view" : "recipe-view");
       });
       if (!shopping) renderRecipes();
     }

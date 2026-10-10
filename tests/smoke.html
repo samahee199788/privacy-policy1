@@ -18,7 +18,8 @@
     const result = document.getElementById("result");
     const frame = document.getElementById("app");
     const tests = [];
-    const timeout = setTimeout(() => fail(new Error("FridgeChef did not load within 10 seconds.")), 10000);
+    const LOAD_TIMEOUT_MS = 10000;
+    const timeout = setTimeout(() => fail(new Error(`FridgeChef did not load within ${LOAD_TIMEOUT_MS / 1000} seconds.`)), LOAD_TIMEOUT_MS);
     function assert(condition, message) {
       if (!condition) throw new Error(message);
       tests.push(message);
@@ -52,8 +53,8 @@
     function runTests() {
       try {
         const doc = appDocument();
-        assert(!doc.getElementById("tab-saved").hasAttribute("aria-controls"), "inactive saved tab has no panel target");
-        assert(!doc.getElementById("tab-shopping").hasAttribute("aria-controls"), "inactive shopping tab has no panel target");
+        assert(doc.getElementById("tab-saved").getAttribute("aria-controls") === "recipe-view", "saved tab references its recipe panel");
+        assert(doc.getElementById("tab-shopping").getAttribute("aria-controls") === "shopping-view", "shopping tab references its panel");
         addPantry("tomato");
         addPantry("tomatoes");
         assert(doc.querySelectorAll(".chip").length === 1, "singular/plural duplicate prevention");
@@ -130,9 +131,9 @@
             tabs[1].focus();
             tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
             tabs[2].click();
-            assert(tabs[2].getAttribute("aria-selected") === "true", "focused tab activates on click or keyboard activation");
-            assert(tabs[2].getAttribute("aria-controls") === "shopping-view", "selected tab points to its panel");
-            assert(!tabs[1].hasAttribute("aria-controls"), "inactive tab does not claim another panel");
+            assert(tabs[2].getAttribute("aria-selected") === "true", "click activates the focused tab");
+            assert(tabs[2].getAttribute("aria-controls") === "shopping-view", "shopping tab keeps its panel relationship");
+            assert(tabs[1].getAttribute("aria-controls") === "recipe-view", "saved tab keeps its panel relationship");
             finish();
           } catch (error) { fail(error); }
         }, { once: true });
